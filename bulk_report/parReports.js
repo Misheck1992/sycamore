@@ -162,7 +162,7 @@ async function generatePARReportV2(reportId, officer, product, branch, dateFrom,
                     return;
                 }
 
-                const totalPortfolio = portfolioRows[0]?.total_portfolio || 0;
+                const totalPortfolio = parseFloat(portfolioRows[0]?.total_portfolio || 0);
                 console.log(`      Total portfolio size: K${new Intl.NumberFormat('en-US').format(totalPortfolio.toFixed(2))}`);
 
                 reportTrackers[reportId].percentage = 20;
@@ -557,7 +557,7 @@ async function generatePARReportV2Enhanced(reportId, officer, product, branch, d
                     return;
                 }
 
-                const totalPortfolio = portfolioRows[0]?.total_portfolio || 0;
+                const totalPortfolio = parseFloat(portfolioRows[0]?.total_portfolio || 0);
                 console.log(`      Total portfolio size: K${new Intl.NumberFormat('en-US').format(totalPortfolio.toFixed(2))}`);
 
                 reportTrackers[reportId].percentage = 20;

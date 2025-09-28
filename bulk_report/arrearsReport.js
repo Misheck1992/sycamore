@@ -184,7 +184,7 @@ async function generateArrearsHTML(loans, filterOptions, reportId, reportTracker
         <h3>SUMMARY</h3>
         <table style="width: 50%; margin: 0;">
             <tr><td><strong>Total Loans in Arrears:</strong></td><td>${totalLoansCount}</td></tr>
-            <tr><td><strong>Total Arrears Amount:</strong></td><td>MWK ${totalArrears.toLocaleString('en-US', {minimumFractionDigits: 2})}</td></tr>
+            <tr><td><strong>Total Arrears Amount (MWK):</strong></td><td>${totalArrears.toLocaleString('en-US', {minimumFractionDigits: 2})}</td></tr>
             <tr><td><strong>High Risk (>90 days):</strong></td><td>${highRiskCount} loans</td></tr>
             <tr><td><strong>Medium Risk (31-90 days):</strong></td><td>${mediumRiskCount} loans</td></tr>
             <tr><td><strong>Low Risk (1-30 days):</strong></td><td>${lowRiskCount} loans</td></tr>
@@ -204,14 +204,14 @@ async function generateArrearsHTML(loans, filterOptions, reportId, reportTracker
                 <th>Loan No.</th>
                 <th>Client Name</th>
                 <th>Product</th>
-                <th>Amount Disbursed</th>
-                <th>Loan Charges</th>
+                <th>Amount Disbursed (MWK)</th>
+                <th>Loan Charges (MWK)</th>
                 <th>Term</th>
                 <th>Repayment Frequency</th>
-                <th>Repayment Amount</th>
+                <th>Repayment Amount (MWK)</th>
                 <th>Due Date</th>
                 <th>Missed Payments</th>
-                <th>Total Arrears</th>
+                <th>Total Arrears (MWK)</th>
                 <th>Last Transaction</th>
                 <th>Days in Arrears</th>
                 <th>Risk Level</th>
@@ -269,14 +269,14 @@ async function generateArrearsHTML(loans, filterOptions, reportId, reportTracker
                 <td>${loan.loan_number || 'N/A'}</td>
                 <td>${customerName}</td>
                 <td>${loan.product_name || 'N/A'}</td>
-                <td class="amount">MWK ${parseFloat(loan.amount_disbursed || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                <td class="amount">MWK ${parseFloat(loan.loan_charges || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                <td class="amount">${parseFloat(loan.amount_disbursed || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                <td class="amount">${parseFloat(loan.loan_charges || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
                 <td class="days">${loan.term || 'N/A'}</td>
                 <td>${loan.repayment_frequency || 'N/A'}</td>
-                <td class="amount">MWK ${parseFloat(loan.repayment_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                <td class="amount">${parseFloat(loan.repayment_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
                 <td>${loan.due_date ? moment(loan.due_date).format('MMM DD, YYYY') : 'N/A'}</td>
                 <td class="days">${loan.num_missed_payments || 0}</td>
-                <td class="amount">MWK ${parseFloat(loan.total_arrears || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                <td class="amount">${parseFloat(loan.total_arrears || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
                 <td>${loan.last_transaction_date ? moment(loan.last_transaction_date).format('MMM DD, YYYY') : 'No Payment'}</td>
                 <td class="days">${arrearDays}</td>
                 <td>${riskLevel}</td>
@@ -291,11 +291,11 @@ async function generateArrearsHTML(loans, filterOptions, reportId, reportTracker
         <tfoot>
             <tr style="background-color: #f0f0f0; font-weight: bold;">
                 <td colspan="3">TOTAL</td>
-                <td class="amount">MWK ${loans.reduce((sum, loan) => sum + parseFloat(loan.amount_disbursed || 0), 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                <td class="amount">MWK ${loans.reduce((sum, loan) => sum + parseFloat(loan.loan_charges || 0), 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                <td class="amount">${loans.reduce((sum, loan) => sum + parseFloat(loan.amount_disbursed || 0), 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                <td class="amount">${loans.reduce((sum, loan) => sum + parseFloat(loan.loan_charges || 0), 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
                 <td colspan="4"></td>
                 <td class="days">${loans.reduce((sum, loan) => sum + parseInt(loan.num_missed_payments || 0), 0)}</td>
-                <td class="amount">MWK ${totalArrears.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                <td class="amount">${totalArrears.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
                 <td colspan="5"></td>
             </tr>
         </tfoot>

@@ -1,17 +1,9 @@
 // loanPortfolioReport.js - Enhanced with country join and removed village
-const mysql = require('mysql');
+const { query } = require('./databaseHelpers');
 const moment = require('moment');
 const util = require('util');
 const fs = require('fs');
 const path = require('path');
-
-// Database connection config (should be in a separate config file)
-const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'finfin',
-};
 
 /**
  * Get loan portfolio report based on filters
@@ -32,20 +24,9 @@ async function generateLoanPortfolioWriteOffReport(options, reportId, reportTrac
 
     console.log('Started processing Loan Portfolio Report');
 
-    // Initialize database connection
-    const db = mysql.createConnection(dbConfig);
-
-    // Promisify database query
-    const query = util.promisify(db.query).bind(db);
-
     try {
-        // Connect to database
-        await new Promise((resolve, reject) => {
-            db.connect(err => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
+        // Using centralized database connection pool
+        console.log('Using centralized database connection pool');
 
         // Update tracker to 10%
         reportTrackers[reportId].percentage = 10;
@@ -306,7 +287,7 @@ async function generateLoanPortfolioWriteOffReport(options, reportId, reportTrac
         reportTrackers[reportId].percentage = 100;
 
         // Close the database connection
-        db.end();
+        // Connection pool handles cleanup automatically
 
         console.log('Returning loan portfolio data');
         return html;
@@ -314,7 +295,7 @@ async function generateLoanPortfolioWriteOffReport(options, reportId, reportTrac
         console.error('Error generating loan portfolio report:', error);
 
         // Close the database connection
-        db.end();
+        // Connection pool handles cleanup automatically
 
         throw error;
     }

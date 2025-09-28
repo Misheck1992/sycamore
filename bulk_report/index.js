@@ -1,6 +1,6 @@
 const express = require('express');
 const util = require('util')
-const mysql = require('mysql');
+const { query } = require('./databaseHelpers');
 const moment = require('moment');
 const fs = require('fs');
 const path= require('path');
@@ -58,20 +58,22 @@ const {
 const app = express();
 const port = process.env.PORT || 4300;
 
-const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: '',
-  database: 'finfin',
-});
-
-db.connect((err) => {
-  if (err) {
-    console.error('Failed to connect to the database: ', err);
-  } else {
-    console.log('Connected to the database');
-  }
-});
+// Database connection is now handled by databaseHelpers.js
+// Helper function to maintain callback compatibility
+const db = {
+    query: async (sql, params, callback) => {
+        if (typeof params === 'function') {
+            callback = params;
+            params = [];
+        }
+        try {
+            const results = await query(sql, params);
+            callback(null, results);
+        } catch (err) {
+            callback(err);
+        }
+    }
+};
 
 let reportTrackers  = {}; // Store the percentage for reports
 let hasNewData = false; // Flag to track if new data is available

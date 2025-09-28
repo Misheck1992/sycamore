@@ -1,23 +1,27 @@
-const mysql = require('mysql');
+const { query } = require('./databaseHelpers');
 
-// Database connection (using same config as your main app)
-const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'finfin',
-});
-
-// Connect to database
-db.connect((err) => {
-    if (err) {
-        console.error('Failed to connect to the database: ', err);
-        process.exit(1);
-    } else {
-        console.log('Connected to the database');
-        startFixing();
+// Helper function to maintain callback compatibility
+const db = {
+    query: async (sql, params, callback) => {
+        if (typeof params === 'function') {
+            callback = params;
+            params = [];
+        }
+        try {
+            const results = await query(sql, params);
+            callback(null, results);
+        } catch (err) {
+            callback(err);
+        }
+    },
+    end: () => {
+        console.log('\n🔚 Database connection handled by pool.');
     }
-});
+};
+
+// Start fixing immediately (no need to connect)
+console.log('Using centralized database connection');
+startFixing();
 
 async function startFixing() {
     console.log('🚀 Starting loan branch fixing process...\n');

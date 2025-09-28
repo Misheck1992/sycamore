@@ -305,6 +305,7 @@ const sumTotalPar = async () => {
 
 // Export all functions
 module.exports = {
+    query, // Export the query function for other files to use
     getAmountOfArrears,
     getAmountOfArrearsPaid,
     getLoanDetails,

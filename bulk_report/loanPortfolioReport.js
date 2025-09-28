@@ -1,14 +1,7 @@
 // loanPortfolioReport.js - With detailed performance logging
-const mysql = require('mysql');
+const { query } = require('./databaseHelpers');
 const moment = require('moment');
 const util = require('util');
-
-const dbConfig = {
-   host: 'localhost',
-  user: 'root',
-  password: '',
-  database: 'finfin',
-};
 
 // Helper function to log with timestamp and duration
 function logStage(stageName, startTime = null) {
@@ -41,18 +34,10 @@ async function generateLoanPortfolioReport(options, reportId, reportTrackers) {
     console.log(`   - Date Range: ${from} to ${to}`);
     console.log('');
 
-    const db = mysql.createConnection(dbConfig);
-    const query = util.promisify(db.query).bind(db);
-
     try {
-        // Stage 1: Database Connection
+        // Stage 1: Database Connection (using pool)
         let stageStart = logStage('Database Connection');
-        await new Promise((resolve, reject) => {
-            db.connect(err => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
+        // No need to explicitly connect - pool handles this
         logStage('Database Connection', stageStart);
         reportTrackers[reportId].percentage = 5;
 
@@ -130,7 +115,7 @@ async function generateLoanPortfolioReport(options, reportId, reportTrackers) {
         if (loanData.length === 0) {
             console.log('⚠️  No loans found matching criteria - generating empty report');
             reportTrackers[reportId].percentage = 100;
-            db.end();
+            // Connection pool handles cleanup automatically
             logStage('LOAN PORTFOLIO REPORT GENERATION', overallStart);
             return generateHTML([]);
         }
@@ -289,7 +274,7 @@ async function generateLoanPortfolioReport(options, reportId, reportTrackers) {
 
         logStage('LOAN PORTFOLIO REPORT GENERATION', overallStart);
 
-        db.end();
+        // Connection pool handles cleanup automatically
         return html;
 
     } catch (error) {
@@ -297,7 +282,7 @@ async function generateLoanPortfolioReport(options, reportId, reportTrackers) {
         console.error('   Stage: During report generation');
         console.error('   Time elapsed:', Date.now() - overallStart, 'ms');
 
-        db.end();
+        // Connection pool handles cleanup automatically
         throw error;
     }
 }
