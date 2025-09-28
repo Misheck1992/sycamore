@@ -6,8 +6,8 @@ const util = require('util');
 const dbConfig = {
    host: 'localhost',
   user: 'root',
-  password: 'SchicksalMwaiiAbelaTingala',
-  database: 'financerealm_sycamore',
+  password: '',
+  database: 'finfin',
 };
 
 // Helper function to log with timestamp and duration

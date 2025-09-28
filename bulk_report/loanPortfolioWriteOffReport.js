@@ -9,8 +9,8 @@ const path = require('path');
 const dbConfig = {
     host: 'localhost',
     user: 'root',
-    password: 'SchicksalMwaiiAbelaTingala',
-    database: 'financerealm_sycamore',
+    password: '',
+    database: 'finfin',
 };
 
 /**
