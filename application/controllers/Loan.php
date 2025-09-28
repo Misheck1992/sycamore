@@ -30,6 +30,31 @@ class Loan extends CI_Controller
     public function file_add(){
         $this->load->view('import');
     }
+
+    // Helper function to get customer name for activity logging
+    private function get_customer_name_for_loan($loan_id) {
+        $loan_details = get_by_id('loan', 'loan_id', $loan_id);
+        $customer_name = '';
+
+        if (!empty($loan_details)) {
+            if ($loan_details->customer_type == 'individual') {
+                $customer = get_by_id('individual_customers', 'id', $loan_details->loan_customer);
+                if (!empty($customer)) {
+                    $customer_name = $customer->Firstname . ' ' . $customer->Lastname;
+                }
+            } elseif ($loan_details->customer_type == 'group') {
+                $group = get_by_id('groups', 'group_id', $loan_details->loan_customer);
+                if (!empty($group)) {
+                    $customer_name = $group->group_name;
+                }
+            }
+        }
+
+        return array(
+            'customer_name' => $customer_name,
+            'loan_details' => $loan_details
+        );
+    }
     public function correct_loan(){
         $this->Loan_model->delete_replace_loans();
     }
@@ -1632,12 +1657,17 @@ class Loan extends CI_Controller
                     $pay_number=$pay_number+1;
                     $counter=$counter+1;
                 }
+                // Get loan and customer details for enhanced logging
+                $customer_data = $this->get_customer_name_for_loan($loan_number);
+                $payment_numbers_str = implode(', ', $pay_number);
+
                 $logger = array(
-
                     'user_id' => $this->session->userdata('user_id'),
-                    'activity' => 'Paid advance loan,  loan ID:' . ' ' . $loan_number . ' ' . ' payment number' . ' ' . $pay_number .
-                        ' ' . 'amount' . ' ' . $amount
-
+                    'activity' => 'Advance Loan Payment: ' .
+                                  ' | Amount: MWK ' . number_format($amount_total, 2) .
+                                  ' | Client: ' . $customer_data['customer_name'] .
+                                  ' | Loan #: ' . (!empty($customer_data['loan_details']) ? $customer_data['loan_details']->loan_number : $loan_number) .
+                                  ' | Payment #s: ' . $payment_numbers_str
                 );
                 log_activity($logger);
 
@@ -1795,13 +1825,16 @@ class Loan extends CI_Controller
 
                 $this->Account_model->transfer_funds1($loan_n->loan_number, $collection_acccount->account_number,$amount, $tid,$proof);
 
+                // Get loan and customer details for enhanced logging
+                $customer_data = $this->get_customer_name_for_loan($loan_number);
+
                 $logger = array(
-
                     'user_id' => $this->session->userdata('user_id'),
-                    'activity' => 'Paid a loan, loan ID:' . ' ' . $loan_number . ' ' . ' payment number' .
-                        ' ' . 'amount' . ' ' . $topay_amount,
-
-
+                    'activity' => 'Loan Payment: Trans Ref: ' . $tid .
+                                  ' | Amount: MWK ' . number_format($amount, 2) .
+                                  ' | Client: ' . $customer_data['customer_name'] .
+                                  ' | Loan #: ' . (!empty($customer_data['loan_details']) ? $customer_data['loan_details']->loan_number : $loan_number) .
+                                  ' | Payment #: ' . $pay_number
                 );
                 log_activity($logger);
 
