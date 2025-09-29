@@ -41,11 +41,11 @@
 						}
 						?>
 					</select> Registered from:
-					<input type="date" name="from" value="<?php  echo $this->input->get('from'); ?>"> Registered to: <input type="date" name="to" value="<?php  echo $this->input->get('to'); ?>"> <input type="submit" value="filter" name="search"><input type="submit" value="export excel" name="search">
+					<input type="date" name="from" value="<?php  echo $this->input->get('from'); ?>"> Registered to: <input type="date" name="to" value="<?php  echo $this->input->get('to'); ?>"> <input type="submit" value="filter" name="search">
 				</form>
 			</div>
 			<div class="m-t-25">
-				<table class="table table-bordered" id="d2" >
+				<table class="table table-bordered" id="data-table-collection" >
 					<thead>
 					<tr>
 

@@ -2176,7 +2176,7 @@ app.post('/generate-report-par-v2', async (req, res) => {
             // Generate filename with timestamp
             const reportId = result.insertId;
             const timestamp = moment().format('YYYYMMDD_HHmmss');
-            const reportFileName = `PAR_Detailed_Portfolio_Report_${timestamp}.html`;
+            const reportFileName = `Detailed_Portfolio_Report_${timestamp}.html`;
 
             // Use absolute path for file storage
             const directory = path.resolve(__dirname, 'reports');
@@ -2191,7 +2191,7 @@ app.post('/generate-report-par-v2', async (req, res) => {
             // Relative path for database storage
             const dbPath = `reports/${reportFileName}`;
 
-            console.log(`Enhanced PAR Report will be saved as: ${reportFileName}`);
+            console.log(`Detailed Portfolio Report will be saved as: ${reportFileName}`);
             console.log(`Full path: ${filePath}`);
             console.log(`DB path: ${dbPath}`);
 
@@ -2214,7 +2214,7 @@ app.post('/generate-report-par-v2', async (req, res) => {
             const dateFrom = req.body.date_from;
             const dateTo = req.body.date_to;
 
-            console.log(`Generating Enhanced PAR Report with filters:`, {
+            console.log(`Generating Detailed Portfolio Report with filters:`, {
                 officer: officer || 'All',
                 product: product || 'All',
                 branch: branch || 'All',
@@ -2244,7 +2244,7 @@ app.post('/generate-report-par-v2', async (req, res) => {
                     console.error('Failed to update report status: ', updateErr);
                     return;
                 }
-                console.log('Enhanced PAR Report processing completed and updated');
+                console.log('Detailed Portfolio Report processing completed and updated');
                 console.log(`Download link saved in database: ${reportTrackers[reportId].dbPath}`);
 
                 // Clean up the tracker object after using it
@@ -2267,7 +2267,7 @@ app.post('/generate-report-par-v2', async (req, res) => {
             };
 
             db.query('UPDATE reports SET ? WHERE id = ?', [updateReport, result.insertId], () => {
-                console.error('Enhanced PAR Report processing failed and updated');
+                console.error('Detailed Portfolio Report processing failed and updated');
 
                 // Clean up the tracker object
                 delete reportTrackers[result.insertId];

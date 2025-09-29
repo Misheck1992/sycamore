@@ -27,7 +27,7 @@
 				<div class="tab-content">
 					<div class="tab-pane active m-t-25" id="tabs-1" role="tabpanel">
 						<p style="font-weight: bolder; color: coral;">Groups Pending Approve</p>
-						<table class="table table-bordered" id="data-table" >
+						<table class="table table-bordered" id="data-table-arrears" >
 							<thead>
 							<tr>
 
@@ -74,7 +74,7 @@
 					</div>
 					<div class="tab-pane m-t-25" id="tabs-2" role="tabpanel">
 						<p style="font-weight: bolder; color: green;">Approved/Active groups</p>
-						<table class="table table-bordered" id="d2" >
+						<table class="table table-bordered" id="data-table1" >
 							<thead>
 							<tr>
 
@@ -122,7 +122,7 @@
 					</div>
 					<div class="tab-pane m-t-25" id="tabs-3" role="tabpanel">
 						<p style="font-weight: bolder; color: red;">Rejected Groups</p>
-						<table class="table table-bordered" id="d2" >
+						<table class="table table-bordered" id="data-table-collection" >
 							<thead>
 							<tr>
 

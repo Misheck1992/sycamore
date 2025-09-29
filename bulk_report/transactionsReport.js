@@ -231,13 +231,15 @@ async function getTransactionsData(branch, transactionType, loan, product, offic
                 console.log(`Processing transaction ${processedCount}/${totalCount} (${processedPercentage}%)`);
 
                 try {
-                    // Get customer name based on customer type
+                    // Get customer name and group name based on customer type
                     let customerName = await getCustomerName(db, transaction.loan_customer, transaction.customer_type);
+                    let customerGroupName = await getCustomerGroupName(db, transaction.loan_customer, transaction.customer_type);
 
-                    // Add customer name to transaction object
+                    // Add customer name and group to transaction object
                     const processedTransaction = {
                         ...transaction,
-                        customer_name: customerName
+                        customer_name: customerName,
+                        customer_group_name: customerGroupName
                     };
 
                     processedTransactions.push(processedTransaction);
@@ -263,6 +265,32 @@ async function getTransactionsData(branch, transactionType, loan, product, offic
                 filterOfficerName
             });
         });
+    });
+}
+
+/**
+ * Get customer group name (returns 'N/A' for individuals)
+ *
+ * @param {Object} db - Database connection
+ * @param {number} customerId - Customer ID
+ * @param {string} customerType - Customer type ('group' or 'individual')
+ * @returns {Promise<string>} - Customer group name or 'N/A'
+ */
+async function getCustomerGroupName(db, customerId, customerType) {
+    return new Promise((resolve, reject) => {
+        if (customerType === 'group') {
+            db.query(
+                'SELECT group_name FROM `groups` WHERE group_id = ?',
+                [customerId],
+                (err, results) => {
+                    if (err) return reject(err);
+                    if (results.length === 0) return resolve('Unknown Group');
+                    resolve(results[0].group_name);
+                }
+            );
+        } else {
+            resolve('N/A');
+        }
     });
 }
 
@@ -331,6 +359,7 @@ function generateHtml(transactions, filterOptions) {
             <td>${transaction.BranchName || ''}</td>
             <td>${transaction.loan_number || ''}</td>
             <td>${transaction.customer_name || ''}</td>
+            <td>${transaction.customer_group_name || ''}</td>
             <td>${transaction.name || ''}</td>
             <td>${transaction.payment_number || ''}</td>
             <td>${formatCurrency(transaction.amount)}</td>
@@ -530,6 +559,7 @@ function generateHtml(transactions, filterOptions) {
                             <th>Branch</th>
                             <th>Loan Number</th>
                             <th>Customer Name</th>
+                            <th>Customer Group</th>
                             <th>Transaction Type</th>
                             <th>Payment Number</th>
                             <th>Amount (MWK)</th>

@@ -139,7 +139,8 @@ async function getUpcomingInstallmentData(loanOfficer, product, branch, reportId
                         employees.Lastname as elname,
                         individual_customers.Firstname as ifname,
                         individual_customers.Lastname as ilname,
-                        branches.BranchName
+                        branches.BranchName,
+                        g.group_name as customer_group_name
                     FROM
                         payement_schedules
                             JOIN
@@ -148,6 +149,8 @@ async function getUpcomingInstallmentData(loanOfficer, product, branch, reportId
                         loan_products ON loan_products.loan_product_id = loan.loan_product
                             LEFT JOIN
                         individual_customers ON individual_customers.id = payement_schedules.customer
+                            LEFT JOIN
+                        \`groups\` g ON g.group_id = loan.loan_customer AND loan.customer_type = 'group'
                             LEFT JOIN
                         employees ON employees.id = loan.loan_added_by
                             LEFT JOIN
@@ -191,8 +194,9 @@ async function getUpcomingInstallmentData(loanOfficer, product, branch, reportId
                         console.log(`Processing payment ${processedCount}/${totalCount} (${processedPercentage}%)`);
 
                         try {
-                            // Get customer name
+                            // Get customer name and group
                             let customerName = '';
+                            let customerGroupName = payment.customer_group_name || 'N/A';
                             if (payment.customer_type === 'group') {
                                 const group = await getGroupById(db, payment.loan_customer);
                                 customerName = `${group.group_name} (${group.group_code})`;
@@ -258,6 +262,7 @@ async function getUpcomingInstallmentData(loanOfficer, product, branch, reportId
                                 branch_name: payment.BranchName || 'N/A',
                                 loan_date: loanDate,
                                 customer_name: customerName,
+                                customer_group_name: customerGroupName,
                                 loan_number: payment.loan_number,
                                 loan_principal: payment.loan_principal,
                                 payment_schedule: repaymentDate,
@@ -514,6 +519,7 @@ function generateHtml(upcomingPayments, filterOptions) {
             <td>${payment.branch_name}</td>
             <td>${payment.loan_date}</td>
             <td>${payment.customer_name}</td>
+            <td>${payment.customer_group_name}</td>
             <td>${payment.loan_number}</td>
             <td>${formatCurrency(payment.loan_principal)}</td>
             <td>${payment.payment_schedule}</td>
@@ -684,7 +690,8 @@ function generateHtml(upcomingPayments, filterOptions) {
                         <tr>
                             <th>Branch</th>
                             <th>Date</th>
-                            <th>Customer Name/Group</th>
+                            <th>Customer Name</th>
+                            <th>Customer Group</th>
                             <th>Loan</th>
                             <th>Amount Disbursed</th>
                             <th>Repayment Date</th>
@@ -703,7 +710,7 @@ function generateHtml(upcomingPayments, filterOptions) {
                     </tbody>
                     <tfoot>
                         <tr>
-                            <td colspan="4">Totals</td>
+                            <td colspan="5">Totals</td>
                             <td>${formatCurrency(totalDisbursed)}</td>
                             <td></td>
                             <td>${formatCurrency(totalInstallmentAmount)}</td>

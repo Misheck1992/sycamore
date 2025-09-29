@@ -530,7 +530,7 @@ function generateExcelStylePARReport(currentDate, loans, totalPortfolio, branchN
  * @returns {Promise<boolean>} Success status
  */
 async function generatePARReportV2Enhanced(reportId, officer, product, branch, dateFrom, dateTo, db, reportTrackers) {
-    console.log('====== ENHANCED PAR DETAILED PORTFOLIO REPORT GENERATION STARTED ======');
+    console.log('====== ENHANCED DETAILED PORTFOLIO REPORT GENERATION STARTED ======');
     console.log('[1/6] Establishing database connection...');
     console.log(`Report will be saved to: ${reportTrackers[reportId].filePath}`);
     console.log(`Filters - Officer: ${officer || 'All'}, Product: ${product}, Branch: ${branch}`);
@@ -599,11 +599,15 @@ async function generatePARReportV2Enhanced(reportId, officer, product, branch, d
                         l.loan_customer,
                         l.customer_type,
                         l.loan_status,
-                        CASE 
+                        CASE
                             WHEN l.customer_type = 'individual' THEN CONCAT(ic.Firstname, ' ', COALESCE(ic.Lastname, ''))
                             WHEN l.customer_type = 'group' THEN CONCAT(g.group_name, ' (', g.group_code, ')')
                             ELSE 'Unknown Customer'
                         END as customer_name,
+                        CASE
+                            WHEN l.customer_type = 'group' THEN g.group_name
+                            ELSE 'N/A'
+                        END as customer_group_name,
                         CONCAT(e.Firstname, ' ', COALESCE(e.Lastname, '')) as loan_officer,
                         b.BranchName as branch_name,
                         lp.product_name,
@@ -654,6 +658,7 @@ async function generatePARReportV2Enhanced(reportId, officer, product, branch, d
                             const processedLoan = {
                                 // Basic loan information
                                 customer_name: loan.customer_name || 'Unknown',
+                                customer_group_name: loan.customer_group_name || 'N/A',
                                 loan_number: loan.loan_number || 'N/A',
                                 product_name: loan.product_name || 'N/A',
                                 branch_name: loan.branch_name || 'Unknown',
@@ -712,7 +717,7 @@ async function generatePARReportV2Enhanced(reportId, officer, product, branch, d
                         const filterDisplayNames = await getFilterDisplayNames(branch, officer, product, db);
 
                         // Generate the enhanced HTML report
-                        const reportHtml = generateEnhancedPARPortfolioReport(
+                        const reportHtml = generateEnhancedPortfolioReport(
                             currentDate,
                             processedLoans,
                             totalPortfolio,
@@ -725,9 +730,9 @@ async function generatePARReportV2Enhanced(reportId, officer, product, branch, d
                         fs.writeFileSync(reportTrackers[reportId].filePath, reportHtml);
                         reportTrackers[reportId].percentage = 100;
 
-                        console.log(`\n✅ Enhanced PAR Portfolio Report generated: ${reportTrackers[reportId].filePath}`);
+                        console.log(`\n✅ Enhanced Portfolio Report generated: ${reportTrackers[reportId].filePath}`);
                         console.log(`Total loans in report: ${processedLoans.length}`);
-                        console.log('====== ENHANCED PAR DETAILED PORTFOLIO REPORT COMPLETED ======');
+                        console.log('====== ENHANCED DETAILED PORTFOLIO REPORT COMPLETED ======');
 
                         resolve(true);
 
@@ -1011,7 +1016,7 @@ async function getFilterDisplayNames(branch, officer, product, db) {
 }
 
 /**
- * Generate Enhanced PAR Portfolio Report HTML
+ * Generate Enhanced Portfolio Report HTML
  * @param {string} currentDate - Current date
  * @param {Array} loans - Array of processed loans
  * @param {number} totalPortfolio - Total portfolio amount
@@ -1020,7 +1025,7 @@ async function getFilterDisplayNames(branch, officer, product, db) {
  * @param {string} dateTo - End date
  * @returns {string} HTML report content
  */
-function generateEnhancedPARPortfolioReport(currentDate, loans, totalPortfolio, filterDisplayNames, dateFrom, dateTo) {
+function generateEnhancedPortfolioReport(currentDate, loans, totalPortfolio, filterDisplayNames, dateFrom, dateTo) {
     const formatCurrency = (amount) => {
         if (isNaN(amount) || amount === null || amount === undefined) {
             return '0.00';
@@ -1051,13 +1056,10 @@ function generateEnhancedPARPortfolioReport(currentDate, loans, totalPortfolio, 
     const totalLoans = loans.length;
     const totalOutstandingBalance = loans.reduce((sum, loan) => sum + (loan.outstanding_balance || 0), 0);
     const totalInArrears = loans.reduce((sum, loan) => sum + (loan.amount_in_arrears || 0), 0);
-    const totalPAR1_14 = loans.reduce((sum, loan) => sum + (loan.par_1_14_days || 0), 0);
-    const totalPAR15_29 = loans.reduce((sum, loan) => sum + (loan.par_15_29_days || 0), 0);
-    const totalPAR30_59 = loans.reduce((sum, loan) => sum + (loan.par_30_59_days || 0), 0);
-    const totalPAR60_89 = loans.reduce((sum, loan) => sum + (loan.par_60_89_days || 0), 0);
-    const totalPAR90_179 = loans.reduce((sum, loan) => sum + (loan.par_90_179_days || 0), 0);
-    const totalPAR180_364 = loans.reduce((sum, loan) => sum + (loan.par_180_364_days || 0), 0);
-    const totalPAR365Plus = loans.reduce((sum, loan) => sum + (loan.par_365_plus_days || 0), 0);
+    const totalPrincipalDisbursed = loans.reduce((sum, loan) => sum + (loan.loan_principal || 0), 0);
+    const totalExpectedInstallments = loans.reduce((sum, loan) => sum + (loan.total_expected_installments || 0), 0);
+    const totalActualPayments = loans.reduce((sum, loan) => sum + (loan.actual_payments || 0), 0);
+    const totalCollateralValue = loans.reduce((sum, loan) => sum + (loan.collateral_value || 0), 0);
 
     // Generate loan rows
     const loanRows = loans.map((loan, index) => {
@@ -1065,6 +1067,7 @@ function generateEnhancedPARPortfolioReport(currentDate, loans, totalPortfolio, 
             <tr>
                 <td class="text-center">${index + 1}</td>
                 <td>${loan.customer_name || 'N/A'}</td>
+                <td>${loan.customer_group_name || 'N/A'}</td>
                 <td>${loan.loan_number || 'N/A'}</td>
                 <td>${loan.product_name || 'N/A'}</td>
                 <td>${loan.branch_name || 'N/A'}</td>
@@ -1078,14 +1081,6 @@ function generateEnhancedPARPortfolioReport(currentDate, loans, totalPortfolio, 
                 <td class="text-right">${formatCurrency(loan.amount_in_arrears)}</td>
                 <td class="text-center">${loan.days_in_arrears || 0}</td>
                 <td class="text-center">${loan.payments_in_arrears || 0}</td>
-                <td class="text-right">${formatCurrency(loan.par_1_14_days || 0)}</td>
-                <td class="text-right">${formatCurrency(loan.par_15_29_days || 0)}</td>
-                <td class="text-right">${formatCurrency(loan.par_30_59_days || 0)}</td>
-                <td class="text-right">${formatCurrency(loan.par_60_89_days || 0)}</td>
-                <td class="text-right">${formatCurrency(loan.par_90_179_days || 0)}</td>
-                <td class="text-right">${formatCurrency(loan.par_180_364_days || 0)}</td>
-                <td class="text-right">${formatCurrency(loan.par_365_plus_days || 0)}</td>
-                <td>${loan.risk_classification || 'Current'}</td>
                 <td class="text-right">${formatPercentage(loan.collection_rate)}</td>
                 <td>${formatDate(loan.last_payment_date)}</td>
                 <td class="text-right">${formatCurrency(loan.collateral_value)}</td>
@@ -1106,7 +1101,7 @@ function generateEnhancedPARPortfolioReport(currentDate, loans, totalPortfolio, 
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>PAR Detailed Portfolio Report</title>
+        <title>Detailed Portfolio Report</title>
         <style>
             body { font-family: Arial, sans-serif; margin: 0; padding: 10px; font-size: 12px; }
             .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #153505; padding-bottom: 10px; }
@@ -1135,7 +1130,7 @@ function generateEnhancedPARPortfolioReport(currentDate, loans, totalPortfolio, 
         <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
         <script>
             function exportData(type) {
-                const fileName = 'PAR_Detailed_Portfolio_Report.' + type;
+                const fileName = 'Detailed_Portfolio_Report.' + type;
                 const table = document.getElementById("main-table");
                 const wb = XLSX.utils.table_to_book(table);
                 XLSX.writeFile(wb, fileName);
@@ -1144,7 +1139,7 @@ function generateEnhancedPARPortfolioReport(currentDate, loans, totalPortfolio, 
     </head>
     <body>
         <div class="header">
-            <h1>PAR Detailed Portfolio Report</h1>
+            <h1>Detailed Portfolio Report</h1>
             <div>Sycamore Credit Limited - Generated on ${formatDate(currentDate)}</div>
         </div>
 
@@ -1174,12 +1169,12 @@ function generateEnhancedPARPortfolioReport(currentDate, loans, totalPortfolio, 
                 <div class="summary-value">K${formatCurrency(totalInArrears)}</div>
             </div>
             <div class="summary-item">
-                <div class="summary-label">PAR 1-14 Days</div>
-                <div class="summary-value">K${formatCurrency(totalPAR1_14)}</div>
+                <div class="summary-label">Principal Disbursed</div>
+                <div class="summary-value">K${formatCurrency(totalPrincipalDisbursed)}</div>
             </div>
             <div class="summary-item">
-                <div class="summary-label">PAR 30+ Days</div>
-                <div class="summary-value">K${formatCurrency(totalPAR30_59 + totalPAR60_89 + totalPAR90_179 + totalPAR180_364 + totalPAR365Plus)}</div>
+                <div class="summary-label">Collection Rate</div>
+                <div class="summary-value">${formatPercentage(totalExpectedInstallments > 0 ? (totalActualPayments / totalExpectedInstallments) * 100 : 0)}</div>
             </div>
         </div>
 
@@ -1195,6 +1190,7 @@ function generateEnhancedPARPortfolioReport(currentDate, loans, totalPortfolio, 
                 <tr>
                     <th>#</th>
                     <th>Customer Name</th>
+                    <th>Customer Group</th>
                     <th>Loan Number</th>
                     <th>Product</th>
                     <th>Branch</th>
@@ -1205,17 +1201,9 @@ function generateEnhancedPARPortfolioReport(currentDate, loans, totalPortfolio, 
                     <th>Total Loan Amount</th>
                     <th>Installment Amount</th>
                     <th>Outstanding Balance</th>
-                    <th>Amount in Arrears</th>
+                    <th>Amount in Arrears (MWK)</th>
                     <th>Days in Arrears</th>
                     <th>Payments in Arrears</th>
-                    <th>PAR 1-14 Days</th>
-                    <th>PAR 15-29 Days</th>
-                    <th>PAR 30-59 Days</th>
-                    <th>PAR 60-89 Days</th>
-                    <th>PAR 90-179 Days</th>
-                    <th>PAR 180-364 Days</th>
-                    <th>PAR 365+ Days</th>
-                    <th>Risk Classification</th>
                     <th>Collection Rate</th>
                     <th>Last Payment Date</th>
                     <th>Collateral Value</th>
@@ -1231,7 +1219,7 @@ function generateEnhancedPARPortfolioReport(currentDate, loans, totalPortfolio, 
             </tbody>
             <tfoot>
                 <tr style="background-color: #f0f8f0; font-weight: bold; border-top: 2px solid #153505;">
-                    <td class="text-center" colspan="6">TOTALS</td>
+                    <td class="text-center" colspan="7">TOTALS</td>
                     <td class="text-right">${formatCurrency(loans.reduce((sum, loan) => sum + (loan.loan_principal || 0), 0))}</td>
                     <td class="text-center">-</td>
                     <td class="text-center">-</td>
@@ -1241,14 +1229,6 @@ function generateEnhancedPARPortfolioReport(currentDate, loans, totalPortfolio, 
                     <td class="text-right">${formatCurrency(totalInArrears)}</td>
                     <td class="text-center">${Math.round(loans.reduce((sum, loan) => sum + (loan.days_in_arrears || 0), 0) / totalLoans)}</td>
                     <td class="text-center">${loans.reduce((sum, loan) => sum + (loan.payments_in_arrears || 0), 0)}</td>
-                    <td class="text-right">${formatCurrency(totalPAR1_14)}</td>
-                    <td class="text-right">${formatCurrency(totalPAR15_29)}</td>
-                    <td class="text-right">${formatCurrency(totalPAR30_59)}</td>
-                    <td class="text-right">${formatCurrency(totalPAR60_89)}</td>
-                    <td class="text-right">${formatCurrency(totalPAR90_179)}</td>
-                    <td class="text-right">${formatCurrency(totalPAR180_364)}</td>
-                    <td class="text-right">${formatCurrency(totalPAR365Plus)}</td>
-                    <td class="text-center">-</td>
                     <td class="text-right">${formatPercentage(loans.reduce((sum, loan) => sum + (loan.collection_rate || 0), 0) / totalLoans)}</td>
                     <td class="text-center">-</td>
                     <td class="text-right">${formatCurrency(loans.reduce((sum, loan) => sum + (loan.collateral_value || 0), 0))}</td>
@@ -1259,139 +1239,19 @@ function generateEnhancedPARPortfolioReport(currentDate, loans, totalPortfolio, 
                     <td class="text-center">-</td>
                     <td class="text-center">-</td>
                 </tr>
-                    <tr style="background-color: #e3f2fd; font-weight: bold;">
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">TOTAL PORTFOLIO PRINCIPAL</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatCurrency(totalOutstandingBalance)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">100.00%</td>
-                        <td style="padding: 10px 8px; text-align: center; border: 1px solid #ddd;">Total outstanding principal</td>
-                    </tr>
-                    <tr style="background-color: #fff3e0; font-weight: bold;">
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">PORTFOLIO AT RISK</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatCurrency(totalInArrears)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? (totalInArrears / totalOutstandingBalance) * 100 : 0)}</td>
-                        <td style="padding: 10px 8px; text-align: center; border: 1px solid #ddd;">Total amount at risk</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">Aged 0-7 days</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatCurrency(totalPAR1_14)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? (totalPAR1_14 / totalOutstandingBalance) * 100 : 0)}</td>
-                        <td style="padding: 10px 8px; text-align: center; border: 1px solid #ddd;">Loans overdue 0-7 days</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">Aged 8-30 days</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatCurrency(totalPAR15_29 + totalPAR30_59)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? ((totalPAR15_29 + totalPAR30_59) / totalOutstandingBalance) * 100 : 0)}</td>
-                        <td style="padding: 10px 8px; text-align: center; border: 1px solid #ddd;">Loans overdue 8-30 days</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">Aged 31-60 days</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatCurrency(totalPAR60_89)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? (totalPAR60_89 / totalOutstandingBalance) * 100 : 0)}</td>
-                        <td style="padding: 10px 8px; text-align: center; border: 1px solid #ddd;">Loans overdue 31-60 days</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">Aged 61-90 days</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatCurrency(totalPAR90_179)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? (totalPAR90_179 / totalOutstandingBalance) * 100 : 0)}</td>
-                        <td style="padding: 10px 8px; text-align: center; border: 1px solid #ddd;">Loans overdue 61-90 days</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">Aged 91-120 days</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatCurrency(totalPAR180_364)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? (totalPAR180_364 / totalOutstandingBalance) * 100 : 0)}</td>
-                        <td style="padding: 10px 8px; text-align: center; border: 1px solid #ddd;">Loans overdue 91-120 days</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">Aged 121-180 days</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatCurrency(totalPAR365Plus)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? (totalPAR365Plus / totalOutstandingBalance) * 100 : 0)}</td>
-                        <td style="padding: 10px 8px; text-align: center; border: 1px solid #ddd;">Loans overdue 121-180 days</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">Aged 181+ days</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatCurrency(totalPAR365Plus)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? (totalPAR365Plus / totalOutstandingBalance) * 100 : 0)}</td>
-                        <td style="padding: 10px 8px; text-align: center; border: 1px solid #ddd;">Loans overdue 181+ days</td>
-                    </tr>
                 </tbody>
             </table>
         </div>
 
-        <!-- PAR SUMMARY SECTION -->
-        <div style="margin: 30px 0; padding: 20px; background-color: #e8f5e8; border-radius: 8px; border-left: 5px solid #153505;">
-            <h3 style="margin-top: 0; color: #153505; font-size: 18px; border-bottom: 2px solid #153505; padding-bottom: 10px;">PAR Summary by Age Buckets</h3>
-            
-            <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px;">
-                <thead>
-                    <tr style="background-color: #153505; color: white;">
-                        <th style="padding: 12px 8px; text-align: left; border: 1px solid #ddd;">Age Category</th>
-                        <th style="padding: 12px 8px; text-align: right; border: 1px solid #ddd;">Amount (MWK)</th>
-                        <th style="padding: 12px 8px; text-align: right; border: 1px solid #ddd;">Percentage (%)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr style="background-color: #e3f2fd; font-weight: bold;">
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">TOTAL PORTFOLIO PRINCIPAL</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">MK${formatCurrency(totalOutstandingBalance)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">100.00%</td>
-                    </tr>
-                    <tr style="background-color: #fff3e0; font-weight: bold;">
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">PORTFOLIO AT RISK %</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">MK${formatCurrency(totalInArrears)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? (totalInArrears / totalOutstandingBalance) * 100 : 0)}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">MORE THAN 0 DAYS</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">MK${formatCurrency(totalInArrears)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? (totalInArrears / totalOutstandingBalance) * 100 : 0)}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">MORE THAN 7 DAYS</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">MK${formatCurrency(totalPAR1_14)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? (totalPAR1_14 / totalOutstandingBalance) * 100 : 0)}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">MORE THAN 30 DAYS</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">MK${formatCurrency(totalPAR30_59)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? (totalPAR30_59 / totalOutstandingBalance) * 100 : 0)}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">MORE THAN 60 DAYS</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">MK${formatCurrency(totalPAR60_89)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? (totalPAR60_89 / totalOutstandingBalance) * 100 : 0)}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">MORE THAN 90 DAYS</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">MK${formatCurrency(totalPAR90_179)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? (totalPAR90_179 / totalOutstandingBalance) * 100 : 0)}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">MORE THAN 120 DAYS</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">MK${formatCurrency(totalPAR180_364)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? (totalPAR180_364 / totalOutstandingBalance) * 100 : 0)}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">MORE THAN 180 DAYS</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">MK${formatCurrency(totalPAR365Plus)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? (totalPAR365Plus / totalOutstandingBalance) * 100 : 0)}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px 8px; border: 1px solid #ddd;">MORE THAN 366 DAYS</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">MK${formatCurrency(totalPAR365Plus)}</td>
-                        <td style="padding: 10px 8px; text-align: right; border: 1px solid #ddd;">${formatPercentage(totalOutstandingBalance > 0 ? (totalPAR365Plus / totalOutstandingBalance) * 100 : 0)}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
 
         <div style="margin-top: 30px; padding: 15px; background-color: #f5f5f5; border-radius: 5px; font-size: 11px;">
             <h3 style="margin-top: 0; color: #153505;">Report Notes:</h3>
             <ul style="margin: 0; padding-left: 20px;">
-                <li>PAR (Portfolio at Risk) represents the outstanding balance of loans with payments overdue by the specified number of days</li>
-                <li>Risk Classification: Current (0 days), Watch (1-30 days), Substandard (31-90 days), Doubtful (91-180 days), Loss (180+ days)</li>
+                <li>This is a comprehensive portfolio report showing detailed loan information for all active loans</li>
                 <li>Collection Rate = (Actual Payments / Expected Installments) × 100</li>
+                <li>Outstanding Balance represents the remaining amount to be collected on each loan</li>
+                <li>Arrears information shows loans with missed or overdue payments</li>
                 <li>This report includes all active loans meeting the specified filter criteria</li>
-                <li><strong>PAR Percentages:</strong> Calculated as (PAR Amount / Total Outstanding Balance) × 100</li>
             </ul>
         </div>
     </body>
@@ -1413,7 +1273,7 @@ module.exports = {
     getLastPaymentDate,
     determineRiskClassification,
     getFilterDisplayNames,
-    generateEnhancedPARPortfolioReport,
+    generateEnhancedPortfolioReport,
     getOutstandingPrincipal,
     getAllPaymentsForLoan,
     calculateMaturityDate

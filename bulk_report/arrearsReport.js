@@ -203,6 +203,7 @@ async function generateArrearsHTML(loans, filterOptions, reportId, reportTracker
             <tr>
                 <th>Loan No.</th>
                 <th>Client Name</th>
+                <th>Customer Group</th>
                 <th>Product</th>
                 <th>Amount Disbursed (MWK)</th>
                 <th>Loan Charges (MWK)</th>
@@ -228,8 +229,9 @@ async function generateArrearsHTML(loans, filterOptions, reportId, reportTracker
                 const progressPercent = 20 + (processedCount / totalLoans) * 70;
                 reportTrackers[reportId].percentage = Math.round(progressPercent);
 
-                // Get customer name
+                // Get customer name and group
                 let customerName = '';
+                let customerGroupName = 'N/A';
                 if (loan.customer_type === 'individual') {
                     const customerQuery = 'SELECT Firstname, Lastname FROM individual_customers WHERE id = ?';
                     const customerResult = await queryDatabase(db, customerQuery, [loan.loan_customer]);
@@ -243,8 +245,10 @@ async function generateArrearsHTML(loans, filterOptions, reportId, reportTracker
                     const groupResult = await queryDatabase(db, groupQuery, [loan.loan_customer]);
                     if (groupResult.length > 0) {
                         customerName = `${groupResult[0].group_name} (${groupResult[0].group_code})`;
+                        customerGroupName = groupResult[0].group_name;
                     } else {
                         customerName = 'Unknown Group';
+                        customerGroupName = 'Unknown Group';
                     }
                 }
 
@@ -268,6 +272,7 @@ async function generateArrearsHTML(loans, filterOptions, reportId, reportTracker
             <tr class="${rowClass}">
                 <td>${loan.loan_number || 'N/A'}</td>
                 <td>${customerName}</td>
+                <td>${customerGroupName}</td>
                 <td>${loan.product_name || 'N/A'}</td>
                 <td class="amount">${parseFloat(loan.amount_disbursed || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
                 <td class="amount">${parseFloat(loan.loan_charges || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>

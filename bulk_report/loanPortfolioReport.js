@@ -54,6 +54,10 @@ async function generateLoanPortfolioReport(options, reportId, reportTrackers) {
                     WHEN ic.id IS NOT NULL THEN CONCAT(ic.Firstname, ' ', ic.Lastname, ' (', COALESCE(ic.ClientId, 'No ID'), ')')
                     ELSE 'Unknown Customer'
                 END AS customer_name,
+                CASE
+                    WHEN g.group_id IS NOT NULL THEN g.group_name
+                    ELSE 'N/A'
+                END AS customer_group_name,
                 ic.DateOfBirth,
                 ic.Gender,
                 ic.PhoneNumber,
@@ -376,6 +380,7 @@ function generateHTML(loanData) {
                     <th>Loan Number</th>
                     <th>Product Name</th>
                     <th>Customer Name</th>
+                    <th>Customer Group</th>
                     <th>Cycle</th>
                     <th>Loan Date</th>
                     <th>Principal (MWK)</th>
@@ -412,6 +417,7 @@ function generateHTML(loanData) {
                     <td>${loan.loan_number}</td>
                     <td>${loan.product_name} (${loan.product_code})</td>
                     <td>${loan.customer_name}</td>
+                    <td>${loan.customer_group_name}</td>
                     <td>${loan.cycle}</td>
                     <td>${formatDisplayDate(loan.loan_date)}</td>
                     <td class="text-right">${formatNumber(loan.loan_principal)}</td>

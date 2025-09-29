@@ -13,7 +13,7 @@
 		<div class="card-body" style="border: thick green solid;border-radius: 14px;">
 
 			<div class="m-t-25">
-        <table class="table table-bordered" id="data-table" >
+        <table class="table table-bordered" id="data-table1" >
 			<thead>
             <tr>
 

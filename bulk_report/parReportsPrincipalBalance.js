@@ -245,6 +245,10 @@ async function generatePrincipalBalancePARReport(reportId, officer, product, bra
                         WHEN l.customer_type = 'group' THEN CONCAT(g.group_name, ' (', g.group_code, ')')
                         ELSE 'Unknown Customer'
                     END as customer_name,
+                    CASE
+                        WHEN l.customer_type = 'group' THEN g.group_name
+                        ELSE 'N/A'
+                    END as customer_group_name,
                     e.Firstname as officer_first_name,
                     e.Lastname as officer_last_name,
                     b.BranchName as branch_name,
@@ -329,6 +333,7 @@ async function generatePrincipalBalancePARReport(reportId, officer, product, bra
 
                         processedLoans.push({
                             customerName,
+                            customerGroupName: loan.customer_group_name || 'N/A',
                             loanNumber: loan.loan_number || 'N/A',
                             productName: loan.product_name || 'N/A',
                             officerName,
@@ -494,6 +499,7 @@ function generatePrincipalBalancePARHTML(currentDate, loans, totalPortfolioPrinc
         return `
             <tr>
                 <td>${loan.customerName}</td>
+                <td>${loan.customerGroupName}</td>
                 <td>${loan.loanNumber}</td>
                 <td>${loan.productName}</td>
                 <td>${loan.officerName}</td>
@@ -553,15 +559,16 @@ function generatePrincipalBalancePARHTML(currentDate, loans, totalPortfolioPrinc
                     <td colspan="5">Principal Balance PAR Report</td>
                     <td>As Of:</td>
                     <td colspan="2">${moment(currentDate).format('MM/DD/YYYY')}</td>
-                    <td colspan="6"></td>
+                    <td colspan="7"></td>
                 </tr>
                 <tr class="header-row">
                     <td>Branch:</td>
                     <td colspan="5">${branchName}</td>
-                    <td colspan="9" class="date-filter">${dateRangeDisplay}</td>
+                    <td colspan="10" class="date-filter">${dateRangeDisplay}</td>
                 </tr>
                 <tr class="header-row">
                     <td>Customer</td>
+                    <td>Customer Group</td>
                     <td>Loan #</td>
                     <td>Product</td>
                     <td>Officer</td>
@@ -579,7 +586,7 @@ function generatePrincipalBalancePARHTML(currentDate, loans, totalPortfolioPrinc
                 </tr>
                 ${loanRows}
                 <tr class="total-row">
-                    <td colspan="4">TOTAL</td>
+                    <td colspan="5">TOTAL</td>
                     <td style="text-align: right;">${formatCurrency(total_principal_balance)}</td>
                     <td style="text-align: right;">${formatCurrency(total_arrears)}</td>
                     <td style="text-align: right;">${formatCurrency(total_1_plus_days)}</td>
