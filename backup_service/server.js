@@ -7,7 +7,7 @@ import chokidar from 'chokidar';
 import http from 'http';
 import { fileURLToPath } from 'url';
 
-// Load dotenv if available, otherwise use process.env directly
+// Load dotenv if available, otherwise use process.env 
 let config;
 try {
   const { config: dotenvConfig } = await import('dotenv');
