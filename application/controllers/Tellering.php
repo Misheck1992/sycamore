@@ -21,26 +21,75 @@ class Tellering extends CI_Controller
         $loannumber = $this->input->get('loannumber');
 
         $search = $this->input->get('search');
-        if($search=="filter"){
-            $data['loan_data'] = $this->Transaction_model->track_transactions($loannumber);
-            $this->load->view('admin/header');
-            $this->load->view('tellering/transactions',$data);
-            $this->load->view('admin/footer');
-        }elseif($search=='pdf'){
-            $data['loan_data'] = $this->Transaction_model->track_transactions($loannumber);
 
+        // If a loan number is provided, filter by it; otherwise get all transactions
+        if(!empty($loannumber)){
+            $loan_data = $this->Transaction_model->track_transactions($loannumber);
+        } else {
+            $loan_data = $this->Transaction_model->track_all_transactions();
+        }
+        $data['loan_data'] = $loan_data;
+
+        if($search=='pdf'){
             $this->load->library('Pdf');
             $html = $this->load->view('reports/transactions_pdf', $data,true);
             $this->pdf->createPDF($html, "transactions report as on".date('Y-m-d'), true,'A4','landscape');
         }elseif($search=='excel'){
 
         }else {
-            $data['loan_data'] = $this->Transaction_model->track_transactions($loannumber);
             $this->load->view('admin/header');
             $this->load->view('tellering/transactions', $data);
             $this->load->view('admin/footer');
         }
     }
+    public function generate_loan_deposits_report()
+    {
+        $from = $this->input->post('from');
+        $to = $this->input->post('to');
+
+        // Initialize cURL session
+        $ch = curl_init();
+
+        // Set the URL of the Node.js endpoint
+        $url = "http://localhost:4300/generate-report-loan-deposits";
+
+        // Prepare the data to be sent
+        $data = [
+            "report_type" => "LOAN_DEPOSITS",
+            "user" => $this->session->userdata('Firstname')." ".$this->session->userdata('Lastname'),
+            "user_id" => $this->session->userdata('user_id'),
+            "from" => $from,
+            "to" => $to
+        ];
+
+        // Convert the data array to JSON
+        $jsonData = json_encode($data);
+
+        // Set cURL options
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Content-Length: ' . strlen($jsonData)
+        ]);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
+
+        // Execute the cURL request
+        $response = curl_exec($ch);
+
+        // Check for errors
+        if (curl_errno($ch)) {
+            $this->toaster->error('Error: ' . curl_error($ch));
+        } else {
+            $this->toaster->success('Success! Loan Deposits Report is being processed. You may do other things and come back to check progress.');
+            redirect(site_url('report'));
+        }
+
+        // Close the cURL session
+        curl_close($ch);
+    }
+
     public function track_transactions_view()
     {
 

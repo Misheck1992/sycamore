@@ -43,8 +43,26 @@
                                 <button type="submit" class="btn btn-primary mr-2">
                                     <i class="anticon anticon-search"></i> Filter
                                 </button>
-                                <a href="<?php echo base_url('Activity_logger'); ?>" class="btn btn-secondary">
+                                <a href="<?php echo base_url('Activity_logger'); ?>" class="btn btn-secondary mr-2">
                                     <i class="anticon anticon-reload"></i> Reset
+                                </a>
+                            </div>
+                        </div>
+                        <div class="row w-100 mt-2">
+                            <div class="col-md-12 mb-2">
+                                <a href="<?php
+                                    $export_url = base_url('Activity_logger/export_excel');
+                                    $export_params = array();
+                                    if (isset($_GET['employee_id']) && !empty($_GET['employee_id'])) $export_params[] = 'employee_id=' . urlencode($_GET['employee_id']);
+                                    if (isset($_GET['date_from']) && !empty($_GET['date_from'])) $export_params[] = 'date_from=' . urlencode($_GET['date_from']);
+                                    if (isset($_GET['date_to']) && !empty($_GET['date_to'])) $export_params[] = 'date_to=' . urlencode($_GET['date_to']);
+                                    if (isset($_GET['search']) && !empty($_GET['search'])) $export_params[] = 'search=' . urlencode($_GET['search']);
+                                    if (!empty($export_params)) {
+                                        $export_url .= '?' . implode('&', $export_params);
+                                    }
+                                    echo $export_url;
+                                ?>" class="btn btn-success">
+                                    <i class="anticon anticon-file-excel"></i> Export to Excel
                                 </a>
                             </div>
                         </div>

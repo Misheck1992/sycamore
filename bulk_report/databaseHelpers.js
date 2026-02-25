@@ -5,7 +5,7 @@ const pool = mysql.createPool({
     host: 'localhost',
     user: 'root',
     password: '',
-    database: 'finfin'
+    database: 'sycamore'
 });
 
 // Helper function to execute queries

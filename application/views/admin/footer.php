@@ -2711,5 +2711,57 @@ function mish(id){
         return confirm(`Are you sure you want to create loans for ${memberRows.length} selected member(s)?`);
     }
 </script>
+<script>
+$(document).ready(function(){
+    // Payment form actions to protect against double submission
+    var paymentActions = ['pay_loan','pay_advance','pay_late_loan','finish_loan'];
+
+    $('form').on('submit', function(e){
+        var form = $(this);
+        var action = form.attr('action') || '';
+
+        // Check if this form posts to a payment endpoint
+        var isPaymentForm = false;
+        for(var i = 0; i < paymentActions.length; i++){
+            if(action.indexOf(paymentActions[i]) !== -1){
+                isPaymentForm = true;
+                break;
+            }
+        }
+
+        if(!isPaymentForm) return;
+
+        // Prevent double submission
+        if(form.data('submitted') === true){
+            e.preventDefault();
+            return false;
+        }
+
+        // Mark as submitted
+        form.data('submitted', true);
+
+        // Find and disable the submit button, show processing
+        var btn = form.find('button[type="submit"]');
+        btn.each(function(){
+            var $btn = $(this);
+            $btn.data('original-text', $btn.html());
+            $btn.html('<i class="fa fa-spinner fa-spin" style="margin-right:5px;"></i>Processing...');
+            $btn.prop('disabled', true);
+            $btn.css({'opacity':'0.7','cursor':'not-allowed'});
+        });
+
+        // Safety: re-enable after 30 seconds in case of network issues
+        setTimeout(function(){
+            form.data('submitted', false);
+            btn.each(function(){
+                var $btn = $(this);
+                $btn.html($btn.data('original-text'));
+                $btn.prop('disabled', false);
+                $btn.css({'opacity':'1','cursor':'pointer'});
+            });
+        }, 30000);
+    });
+});
+</script>
 </body>
 </html>

@@ -11,6 +11,7 @@ const { generateUpcomingInstallmentReport } = require('./upcomingInstallmentRepo
 const { generateTransactionsReport } = require('./transactionsReport');
 const { generateRBMClassificationReport } = require('./rbmClassificationReport');
 const { generateArrearsReport } = require('./arrearsReport');
+const { generateLoanDepositsReport } = require('./loanDepositsReport');
 const {
     generatePARReportV2,
     generatePARReportV2Enhanced,
@@ -2732,6 +2733,109 @@ app.post('/generate-report-arrears', async (req, res) => {
                     delete reportTrackers[result.insertId]; // Remove the tracker
                 }
             });
+        }
+    });
+});
+
+app.post('/generate-report-loan-deposits', async (req, res) => {
+    res.status(202).json({ message: 'Loan Deposits Report generation is processing...' });
+
+    const report = {
+        report_type: 'LOAN_DEPOSITS',
+        user: req.body.user,
+        user_id: req.body.user_id,
+        status: 'in progress',
+    };
+
+    db.query('INSERT INTO reports SET ?', report, async (err, result) => {
+        if (err) {
+            console.error('Failed to insert report: ', err);
+            return;
+        }
+
+        try {
+            const currentDate = moment().format('YYYYMMDD_HHmmss');
+            const paths = getReportPaths('report_loan_deposits', currentDate);
+
+            reportTrackers[result.insertId] = {
+                percentage: 0,
+                intervalId: setInterval(() => updatePercentageToDB(result.insertId), 15000),
+            };
+
+            const filterOptions = {
+                from: req.body.from || null,
+                to: req.body.to || null
+            };
+
+            console.log(`Generating Loan Deposits Report with options: ${JSON.stringify(filterOptions)}`);
+
+            const html = await generateLoanDepositsReport(
+                filterOptions,
+                result.insertId,
+                reportTrackers,
+                db
+            );
+
+            fs.writeFile(paths.filePath, html, async (writeErr) => {
+                if (writeErr) {
+                    console.error('Failed to write data to the file: ', writeErr);
+
+                    const updateReport = {
+                        status: 'failed',
+                        error_message: writeErr.message,
+                        completed_time: new Date(),
+                    };
+
+                    db.query('UPDATE reports SET ? WHERE id = ?', [updateReport, result.insertId]);
+
+                    if (reportTrackers[result.insertId] && reportTrackers[result.insertId].intervalId) {
+                        clearInterval(reportTrackers[result.insertId].intervalId);
+                        delete reportTrackers[result.insertId];
+                    }
+
+                    return;
+                }
+
+                console.log('Data saved to the file:', paths.filePath);
+
+                const updateReport = {
+                    status: 'completed',
+                    percentage: 100,
+                    download_link: paths.dbPath,
+                    completed_time: new Date(),
+                };
+
+                db.query('UPDATE reports SET ? WHERE id = ?', [updateReport, result.insertId], (updateErr) => {
+                    if (updateErr) {
+                        console.error('Failed to update report status: ', updateErr);
+                        return;
+                    }
+                    console.log('Loan Deposits Report processing completed and updated');
+
+                    clearInterval(reportTrackers[result.insertId].intervalId);
+                    delete reportTrackers[result.insertId];
+                });
+            });
+        } catch (err) {
+            console.error('Error during loan deposits report generation: ', err);
+
+            const updateReport = {
+                status: 'failed',
+                error_message: err.message,
+                completed_time: new Date(),
+            };
+
+            db.query('UPDATE reports SET ? WHERE id = ?', [updateReport, result.insertId], (updateErr) => {
+                if (updateErr) {
+                    console.error('Failed to update report failure status: ', updateErr);
+                }
+                console.error('Loan Deposits Report processing failed and updated');
+            });
+
+            if (reportTrackers[result.insertId] && reportTrackers[result.insertId].intervalId) {
+                clearInterval(reportTrackers[result.insertId].intervalId);
+                delete reportTrackers[result.insertId];
+            }
         }
     });
 });

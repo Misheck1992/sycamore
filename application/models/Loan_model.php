@@ -3567,6 +3567,26 @@ class Loan_model extends CI_Model
 		$this->db->where('loan_product_id', $loan_id);
 		$loan = $this->db->get('loan_products')->row();
 
+		// Set default values for missing properties - check both field names
+		if(isset($loan->processing_fees)) {
+			$processing_fee_percent = $loan->processing_fees;
+		} elseif(isset($loan->processing_fee)) {
+			$processing_fee_percent = $loan->processing_fee;
+		} else {
+			$processing_fee_percent = 0;
+		}
+		$loan->processing_fees = $processing_fee_percent;
+
+		// Store original amount for display
+		$original_amount = $amount;
+		$processing_fee_amount = 0;
+
+		// For Reducing Balance Weekly or Bi-weekly, add processing fee to principal (case-insensitive)
+		if(strcasecmp(trim($loan->method), "Reducing Balance") == 0 && (strcasecmp(trim($loan->frequency), "Weekly") == 0 || strcasecmp(trim($loan->frequency), "Bi weekly") == 0)) {
+			$processing_fee_amount = ($processing_fee_percent / 100) * $amount;
+			$amount = $amount + $processing_fee_amount;
+		}
+
 		//divisor
 		switch ($loan->frequency) {
 			case 'Monthly':
@@ -3698,9 +3718,11 @@ class Loan_model extends CI_Model
 			$table = '<div id="calculator"><h3>Loan Info</h3>';
 			$table = $table . '<table border="1" class="table">';
 			$table = $table . '<tr><td>Loan Product:</td><td>' . $loan->product_name . '</td></tr>';
+			$table = $table . '<tr><td>Loan Method:</td><td>' . $loan->method . '</td></tr>';
 			$table = $table . '<tr><td>Interest:</td><td>' . $loan->interest . '%</td></tr>';
 			$table = $table . '<tr><td>Admin Fee %:</td><td>' . $loan->admin_fees . '%</td></tr>';
 			$table = $table . '<tr><td>Loan cover %:</td><td>' . $loan->loan_cover . '%</td></tr>';
+			$table = $table . '<tr><td>Processing Fee %:</td><td>' . (isset($loan->processing_fees) ? $loan->processing_fees : 0) . '%</td></tr>';
 			$table = $table . '<tr><td>Loan Term:</td><td>' . $months . '/'. $loan->frequency . '</td></tr>';
 			$table = $table . '<tr><td>Loan start date:</td><td>' . $date . '</td></tr>';
 			$table = $table . '<tr><td>Loan effective date:</td><td>' . $loan_date . '</td></tr>';
@@ -3709,7 +3731,14 @@ class Loan_model extends CI_Model
 			$table = $table . '</table>';
 			$table = $table . '<h3>Computation</h3>';
 			$table = $table . '<table>';
-			$table = $table . '<tr><td>Loan Amount:</td><td> ' . $this->config->item('currency_symbol') . number_format($amount, 2, '.', ',') . '</td></tr>';
+			// For Reducing Balance Weekly/Bi-weekly, always show breakdown (case-insensitive)
+			if(strcasecmp(trim($loan->method), "Reducing Balance") == 0 && (strcasecmp(trim($loan->frequency), "Weekly") == 0 || strcasecmp(trim($loan->frequency), "Bi weekly") == 0)) {
+				$table = $table . '<tr><td>Original Loan Amount:</td><td> ' . $this->config->item('currency_symbol') . number_format($original_amount, 2, '.', ',') . '</td></tr>';
+				$table = $table . '<tr><td>Processing Fee (' . $loan->processing_fees . '%):</td><td> ' . $this->config->item('currency_symbol') . number_format($processing_fee_amount, 2, '.', ',') . '</td></tr>';
+				$table = $table . '<tr><td><strong>Loan Amount (Principal + Fee):</strong></td><td><strong> ' . $this->config->item('currency_symbol') . number_format($amount, 2, '.', ',') . '</strong></td></tr>';
+			} else {
+				$table = $table . '<tr><td>Loan Amount:</td><td> ' . $this->config->item('currency_symbol') . number_format($amount, 2, '.', ',') . '</td></tr>';
+			}
 //        $table = $table . '<tr><td>Interest per First Month:</td><td> '.$this->config->item('currency_symbol') . $amount*$i.'</td></tr>';
 			$table = $table . '<tr><td>Total extra interest :</td><td> ' . $this->config->item('currency_symbol') . number_format(($total_extra_interest), 2) . '</td></tr>';
 			$table = $table . '<tr><td>Total interest:</td><td> ' . $this->config->item('currency_symbol') . number_format(($total_interest1), 2) . '</td></tr>';
@@ -3879,7 +3908,7 @@ class Loan_model extends CI_Model
 
                 }
             }
-		$table = $table . "<tr style='color: white; background-color: #0e9970'>";
+		$table = $table . "<tr style='color: white; background-color: #2a389d'>";
 		$table = $table . "<td width='30'>-</td>";
 		$table = $table . "<td width='30'>-</td>";
 
@@ -4073,7 +4102,7 @@ class Loan_model extends CI_Model
 
 
 			}
-		$table = $table . "<tr style='color: white; background-color: #0e9970'>";
+		$table = $table . "<tr style='color: white; background-color: #2a389d'>";
 		$table = $table . "<td width='30'>-</td>";
 		$table = $table . "<td width='60'>-</td>";
 		$table = $table . "<td width='60'>-</td>";
@@ -4223,7 +4252,7 @@ class Loan_model extends CI_Model
 
 
     }
-function add_amortization_biweekly($principal, $loan_amount, $product_id, $loan_term, $start_date, $loan_customer, $customer_type, $worthness_file, $narration, $added_by) {
+function add_amortization_biweekly($principal, $loan_amount, $product_id, $loan_term, $start_date, $loan_customer, $customer_type, $worthness_file, $narration, $added_by, $funds_source = null, $batch = null, $from_group = 'No', $group_id = null) {
   $this->db->select('MAX(counter) as max_c');
   $lid = $this->db->get('loan');
   $result = $lid->row();
@@ -4283,7 +4312,11 @@ function add_amortization_biweekly($principal, $loan_amount, $product_id, $loan_
    'loan_amount_total' => $loan_amount + $total_interest_amount + $payment_amount_processing_fee,
    'next_payment_id' => 1,
    'loan_added_by' => $added_by,
-   'counter' => $fcounter
+   'counter' => $fcounter,
+   'funds_source' => $funds_source,
+   'batch' => $batch,
+   'from_group' => $from_group,
+   'group_id' => $group_id
   );
   $this->db->insert($this->table, $data);
 
@@ -4350,7 +4383,7 @@ function add_amortization_biweekly($principal, $loan_amount, $product_id, $loan_
   $this->db->insert('account', $data_account);
   return $id;
 }
-    function add_amortization_straight_weekly($principal,$loan_amount, $product_id, $loan_term, $start_date,$loan_customer, $customer_type, $worthness_file,$narration,$added_by, $funds_source = null) {
+    function add_amortization_straight_weekly($principal,$loan_amount, $product_id, $loan_term, $start_date,$loan_customer, $customer_type, $worthness_file,$narration,$added_by, $funds_source = null, $batch = null, $from_group = 'No', $group_id = null) {
 		$this->db->select('MAX(counter) as max_c');
 		$lid = $this->db->get('loan');
 		$result = $lid->row();
@@ -4418,7 +4451,11 @@ function add_amortization_biweekly($principal, $loan_amount, $product_id, $loan_
 			'loan_amount_total' => $loan_amount+$total_interest_amount+$payment_amount_processing_fee,
 			'next_payment_id' => 1,
 			'loan_added_by' => $added_by,
-			'counter' => $fcounter
+			'counter' => $fcounter,
+			'funds_source' => $funds_source,
+			'batch' => $batch,
+			'from_group' => $from_group,
+			'group_id' => $group_id
 		);
 		$this->db->insert($this->table, $data);
 
@@ -4493,6 +4530,394 @@ function add_amortization_biweekly($principal, $loan_amount, $product_id, $loan_
 
 
 	}
+
+	function add_reducing_balance_weekly($original_amount,$principal, $months, $product_id, $ldate, $loan_customer, $customer_type, $worthness_file, $narration, $added_by, $branch, $funds_source = null, $batch = null, $from_group = 'No', $group_id = null) {
+		// Generate loan number
+		$this->db->select('MAX(counter) as max_c');
+		$lid = $this->db->get('loan');
+		$result = $lid->row();
+		$loanid = 'SCL' . date("Ymd") . (100 + $result->max_c);
+		$fcounter = $result->max_c + 1;
+
+		// Get loan product details
+		$loan = $this->db->select("*")->from('loan_products')->where('loan_product_id', $product_id)->get()->row();
+
+		// Set default values for missing properties
+		$loan->loan_cover = isset($loan->loan_cover) ? $loan->loan_cover : 0;
+		$loan->admin_fees = isset($loan->admin_fees) ? $loan->admin_fees : 0;
+
+		// Check both field name variations for processing fee
+		if(isset($loan->processing_fees)) {
+			$processing_fee_percent = $loan->processing_fees;
+		} elseif(isset($loan->processing_fee)) {
+			$processing_fee_percent = $loan->processing_fee;
+		} else {
+			$processing_fee_percent = 0;
+		}
+       
+		// DEBUG: Log processing fee calculation
+		error_log("WEEKLY FUNCTION - Original: {$original_amount}, Processing %: {$processing_fee_percent}");
+
+		// Calculate processing fee and add to principal
+		$processing_fee_amount = ($processing_fee_percent / 100) * $original_amount;
+		//$amount = $original_amount + $processing_fee_amount; // New principal with processing fee included
+		$amount = $principal; // New principal with processing fee included
+
+		// DEBUG: Log new amount
+		error_log("WEEKLY FUNCTION - Processing Fee: {$processing_fee_amount}, New Amount: {$amount}");
+
+		// Set frequency parameters for Weekly
+		$days = 7;
+		$loan_date = $ldate;
+
+		// Calculate interest rates
+		$i = ($loan->interest / 100) * 12;
+		$af = ($loan->admin_fees / 100) * 12;
+		$lc = ($loan->loan_cover / 100) * 12;
+		$total_deduction = $i + $af + $lc;
+
+		// Calculate monthly payment using amortization formula with new principal (including processing fee)
+		$monthly_payment = ($amount * ($total_deduction / 12) * pow((1 + $total_deduction / 12), $months) / (pow((1 + $total_deduction / 12), $months) - 1));
+		$monthly_payment_config = $monthly_payment;
+
+		// Calculate totals for loan record
+		$current_balance1 = $amount;
+		$total_interest1 = 0;
+		$total_admin_fees = 0;
+		$total_loan_cover = 0;
+
+		// DEBUG: Log starting balance
+		error_log("WEEKLY FUNCTION - Starting balance for interest calc: {$current_balance1}, Interest Rate: {$i}");
+
+		// Calculate total interest, admin fees, and loan cover
+		while ($current_balance1 > 0) {
+			$towards_interest1 = ($i / 12) * $current_balance1;
+			$towards_fees = ($af / 12) * $current_balance1;
+			$towards_lc = ($lc / 12) * $current_balance1;
+
+			if ($monthly_payment > $current_balance1) {
+				$monthly_payment_temp = $current_balance1 + $towards_interest1 + $towards_fees + $towards_lc;
+			} else {
+				$monthly_payment_temp = $monthly_payment;
+			}
+
+			$towards_balance1 = $monthly_payment_temp - ($towards_interest1 + $towards_fees + $towards_lc);
+			$total_interest1 = $total_interest1 + $towards_interest1;
+			$total_admin_fees = $total_admin_fees + $towards_fees;
+			$total_loan_cover = $total_loan_cover + $towards_lc;
+			$current_balance1 = $current_balance1 - $towards_balance1;
+		}
+
+		// DEBUG: Log final totals
+		error_log("WEEKLY FUNCTION - Total Interest: {$total_interest1}, Pay Total: " . ($total_interest1 + $amount + $total_admin_fees + $total_loan_cover));
+
+		$pay_total = $total_interest1 + $amount + $total_admin_fees + $total_loan_cover;
+
+		// Insert loan record
+		$data = array(
+			'loan_number' => $loanid,
+			'loan_product' => $product_id,
+			'loan_customer' => $loan_customer,
+			'customer_type' => $customer_type,
+			'loan_date' => $ldate,
+			'loan_principal' => $principal,
+			'loan_period' => $months,
+			'worthness_file' => $worthness_file,
+			'narration' => $narration,
+			'period_type' => $loan->frequency,
+			'loan_amount_term' => $monthly_payment_config,
+			'loan_interest' => $loan->interest,
+			'loan_interest_amount' => $total_interest1,
+			'admin_fee' => $loan->admin_fees,
+			'admin_fees_amount' => $total_admin_fees,
+			'loan_cover' => $loan->loan_cover,
+			'loan_cover_amount' => $total_loan_cover,
+			'loan_amount_total' => $pay_total,
+			'next_payment_id' => 1,
+			'loan_added_by' => $added_by,
+			'counter' => $fcounter,
+			'branch' => $branch,
+			'funds_source' => $funds_source,
+			'batch' => $batch,
+			'from_group' => $from_group,
+			'group_id' => $group_id,
+		);
+		$this->db->insert($this->table, $data);
+
+		// Get the inserted loan ID
+		$id = $this->db->insert_id();
+
+		// Create payment schedules using reducing balance calculation
+		$current_balance = $amount;
+		$payment_counter = 1;
+		$date = $loan_date;
+
+		// Add 2 weeks grace period
+		$date = date('Y-m-d', strtotime('+2 weeks', strtotime($date)));
+
+		while ($current_balance > 0 && $payment_counter <= $months) {
+			// Calculate portions for each payment
+			$towards_interest = ($i / 12) * $current_balance;
+			$towards_fees1 = ($af / 12) * $current_balance;
+			$towards_lc1 = ($lc / 12) * $current_balance;
+
+			// Adjust last payment if needed
+			if ($monthly_payment > $current_balance) {
+				$monthly_payment_actual = $current_balance + $towards_interest + $towards_fees1 + $towards_lc1;
+			} else {
+				$monthly_payment_actual = $monthly_payment;
+			}
+
+			$towards_balance = $monthly_payment_actual - ($towards_interest + $towards_fees1 + $towards_lc1);
+			$current_balance = $current_balance - $towards_balance;
+
+			// Calculate payment date (weekly frequency)
+			$frequency = $days * $payment_counter;
+			$newdate = strtotime('+' . $frequency . ' day', strtotime($date));
+			$newdate = date('Y-m-d', $newdate);
+
+			// Insert payment schedule
+			$this->db->insert(
+				'payement_schedules', array(
+					'customer' => $loan_customer,
+					'customer_type' => $customer_type,
+					'loan_id' => $id,
+					'payment_schedule' => $newdate,
+					'payment_number' => $payment_counter,
+					'amount' => $monthly_payment_actual,
+					'principal' => $towards_balance,
+					'interest' => $towards_interest,
+					'padmin_fee' => $towards_fees1,
+					'ploan_cover' => $towards_lc1,
+					'paid_amount' => 0,
+					'loan_balance' => $current_balance,
+					'loan_date' => $loan_date,
+				)
+			);
+
+			$payment_counter++;
+		}
+
+		// Create account record
+		$data_account = array(
+			'client_id' => $loan_customer,
+			'account_number' => $loanid,
+			'balance' => 0,
+			'account_type' => 2,
+			'account_type_product' => $product_id,
+		);
+		$this->db->insert('account', $data_account);
+
+		return $id;
+	}
+
+	function add_reducing_balance_biweekly($original_amount, $months, $product_id, $ldate, $loan_customer, $customer_type, $worthness_file, $narration, $added_by, $branch, $funds_source = null, $batch = null, $from_group = 'No', $group_id = null) {
+		// Generate loan number
+		$this->db->select('MAX(counter) as max_c');
+		$lid = $this->db->get('loan');
+		$result = $lid->row();
+		$loanid = 'SCL' . date("Ymd") . (100 + $result->max_c);
+		$fcounter = $result->max_c + 1;
+
+		// Get loan product details
+		$loan = $this->db->select("*")->from('loan_products')->where('loan_product_id', $product_id)->get()->row();
+
+		// Set default values for missing properties
+		$loan->loan_cover = isset($loan->loan_cover) ? $loan->loan_cover : 0;
+		$loan->admin_fees = isset($loan->admin_fees) ? $loan->admin_fees : 0;
+
+		// Check both field name variations for processing fee
+		if(isset($loan->processing_fees)) {
+			$processing_fee_percent = $loan->processing_fees;
+		} elseif(isset($loan->processing_fee)) {
+			$processing_fee_percent = $loan->processing_fee;
+		} else {
+			$processing_fee_percent = 0;
+		}
+
+		// Calculate processing fee and add to principal
+		$processing_fee_amount = ($processing_fee_percent / 100) * $original_amount;
+		$amount = $original_amount + $processing_fee_amount; // New principal with processing fee included
+
+		// Set frequency parameters for Bi-weekly
+		$days = 15;
+		$loan_date = $ldate;
+
+		// Calculate interest rates
+		$i = ($loan->interest / 100) * 12;
+		$af = ($loan->admin_fees / 100) * 12;
+		$lc = ($loan->loan_cover / 100) * 12;
+		$total_deduction = $i + $af + $lc;
+
+		// Calculate monthly payment using amortization formula with new principal (including processing fee)
+		$monthly_payment = ($amount * ($total_deduction / 12) * pow((1 + $total_deduction / 12), $months) / (pow((1 + $total_deduction / 12), $months) - 1));
+		$monthly_payment_config = $monthly_payment;
+
+		// Calculate totals for loan record
+		$current_balance1 = $amount;
+		$total_interest1 = 0;
+		$total_admin_fees = 0;
+		$total_loan_cover = 0;
+
+		// Calculate total interest, admin fees, and loan cover
+		while ($current_balance1 > 0) {
+			$towards_interest1 = ($i / 12) * $current_balance1;
+			$towards_fees = ($af / 12) * $current_balance1;
+			$towards_lc = ($lc / 12) * $current_balance1;
+
+			if ($monthly_payment > $current_balance1) {
+				$monthly_payment_temp = $current_balance1 + $towards_interest1 + $towards_fees + $towards_lc;
+			} else {
+				$monthly_payment_temp = $monthly_payment;
+			}
+
+			$towards_balance1 = $monthly_payment_temp - ($towards_interest1 + $towards_fees + $towards_lc);
+			$total_interest1 = $total_interest1 + $towards_interest1;
+			$total_admin_fees = $total_admin_fees + $towards_fees;
+			$total_loan_cover = $total_loan_cover + $towards_lc;
+			$current_balance1 = $current_balance1 - $towards_balance1;
+		}
+
+		$pay_total = $total_interest1 + $amount + $total_admin_fees + $total_loan_cover;
+
+		// Insert loan record
+		$data = array(
+			'loan_number' => $loanid,
+			'loan_product' => $product_id,
+			'loan_customer' => $loan_customer,
+			'customer_type' => $customer_type,
+			'loan_date' => $ldate,
+			'loan_principal' => $amount,
+			'loan_period' => $months,
+			'worthness_file' => $worthness_file,
+			'narration' => $narration,
+			'period_type' => $loan->frequency,
+			'loan_amount_term' => $monthly_payment_config,
+			'loan_interest' => $loan->interest,
+			'loan_interest_amount' => $total_interest1,
+			'admin_fee' => $loan->admin_fees,
+			'admin_fees_amount' => $total_admin_fees,
+			'loan_cover' => $loan->loan_cover,
+			'loan_cover_amount' => $total_loan_cover,
+			'loan_amount_total' => $pay_total,
+			'next_payment_id' => 1,
+			'loan_added_by' => $added_by,
+			'counter' => $fcounter,
+			'branch' => $branch,
+			'funds_source' => $funds_source,
+			'batch' => $batch,
+			'from_group' => $from_group,
+			'group_id' => $group_id,
+		);
+		$this->db->insert($this->table, $data);
+
+		// Get the inserted loan ID
+		$id = $this->db->insert_id();
+
+		// Create payment schedules using reducing balance calculation with bi-weekly frequency
+		$current_balance = $amount;
+		$payment_counter = 1;
+		$date = $loan_date;
+		$loan_day = date('d', strtotime($date));
+		$loan_month = date('m', strtotime($date));
+
+		// Get first payment day if 15 or 30
+		if ($loan_day >= 15) {
+			if ($loan_month == '02') {
+				$start_day = 28;
+			} else {
+				$start_day = 30;
+			}
+		} elseif ($loan_day == 30 or $loan_day > 15) {
+			$start_day = 15;
+		} else {
+			$start_day = 15;
+		}
+
+		$date = date('Y/m/' . $start_day, strtotime($date));
+
+		// Add grace period (skip one payment period for bi-weekly)
+		if ($start_day == 15) {
+			// If first payment was 15th, move to 30th/28th
+			if (date('m', strtotime($date)) == '02') {
+				$date = date('Y/02/28', strtotime($date));
+			} else {
+				$date = date('Y/m/30', strtotime($date));
+			}
+		} else {
+			// If first payment was 30th/28th, move to 15th of next month
+			$date = date('Y/m/15', strtotime('+1 month', strtotime($date)));
+		}
+
+		while ($current_balance > 0 && $payment_counter <= $months) {
+			// Calculate portions for each payment
+			$towards_interest = ($i / 12) * $current_balance;
+			$towards_fees1 = ($af / 12) * $current_balance;
+			$towards_lc1 = ($lc / 12) * $current_balance;
+
+			// Adjust last payment if needed
+			if ($monthly_payment > $current_balance) {
+				$monthly_payment_actual = $current_balance + $towards_interest + $towards_fees1 + $towards_lc1;
+			} else {
+				$monthly_payment_actual = $monthly_payment;
+			}
+
+			$towards_balance = $monthly_payment_actual - ($towards_interest + $towards_fees1 + $towards_lc1);
+			$current_balance = $current_balance - $towards_balance;
+
+			// Insert payment schedule
+			$this->db->insert(
+				'payement_schedules', array(
+					'customer' => $loan_customer,
+					'customer_type' => $customer_type,
+					'loan_id' => $id,
+					'payment_schedule' => $date,
+					'payment_number' => $payment_counter,
+					'amount' => $monthly_payment_actual,
+					'principal' => $towards_balance,
+					'interest' => $towards_interest,
+					'padmin_fee' => $towards_fees1,
+					'ploan_cover' => $towards_lc1,
+					'paid_amount' => 0,
+					'loan_balance' => $current_balance,
+					'loan_date' => $loan_date,
+				)
+			);
+
+			// Calculate next payment date (bi-weekly: 15th and 30th/28th)
+			$day = date('d', strtotime($date));
+			if ($day == 15) {
+				// Check if February
+				if (date('m', strtotime($date)) == '02') {
+					$date = date('Y/02/28', strtotime($date));
+				} else {
+					$date = date('Y/m/30', strtotime($date));
+				}
+			} elseif ($day == 30 or $day > 15) {
+				// Check if January, going to February
+				if (date('m', strtotime($date)) == '01') {
+					$date = date('Y/02/15', strtotime('+1 month', strtotime($date)));
+				} else {
+					$date = date('Y/m/15', strtotime('+1 month', strtotime($date)));
+				}
+			}
+
+			$payment_counter++;
+		}
+
+		// Create account record
+		$data_account = array(
+			'client_id' => $loan_customer,
+			'account_number' => $loanid,
+			'balance' => 0,
+			'account_type' => 2,
+			'account_type_product' => $product_id,
+		);
+		$this->db->insert('account', $data_account);
+
+		return $id;
+	}
+
     function add_amortization_straight_weekly_rerun($principal,$loan_amount, $product_id, $loan_term, $start_date,$loan_customer, $customer_type, $loan_number, $loan_id,$fee) {
         $this->db->select('MAX(counter) as max_c');
         $lid = $this->db->get('loan');
@@ -4918,13 +5343,10 @@ $this->db->where('payment_number',$i);
                     $frequency = $days * $ii;
                     $newdate = strtotime('+' . $frequency . ' day', strtotime($date));
 
-                    //check if payment date landed on weekend
-                    //if Sunday, make it Monday. If Saturday, make it Friday
-//					if (date('D', $newdate) == 'Sun') {
-//						$newdate = strtotime('+1 day', $newdate);
-//					} elseif (date('D', $newdate) == 'Sat') {
-//						$newdate = strtotime('-1 day', $newdate);
-//					}
+                    //check if payment date landed on Sunday, push to Monday
+                    if (date('D', $newdate) == 'Sun') {
+                        $newdate = strtotime('+1 day', $newdate);
+                    }
 
                     $newdate = date('Y-m-d', $newdate);
                     $this->db->where('loan_id',$lidd)->delete('payement_schedules');
@@ -4981,13 +5403,10 @@ $this->db->where('payment_number',$i);
                         $frequency = $days * $ii;
                         $newdate = strtotime('+' . $frequency . ' day', strtotime($date));
 
-                        //check if payment date landed on weekend
-                        //if Sunday, make it Monday. If Saturday, make it Friday
-//						if (date('D', $newdate) == 'Sun') {
-//							$newdate = strtotime('+1 day', $newdate);
-//						} elseif (date('D', $newdate) == 'Sat') {
-//							$newdate = strtotime('-1 day', $newdate);
-//						}
+                        //check if payment date landed on Sunday, push to Monday
+                        if (date('D', $newdate) == 'Sun') {
+                            $newdate = strtotime('+1 day', $newdate);
+                        }
 
                         $newdate = date('Y-m-d', $newdate);
                         $newdate = date('Y-m-t', strtotime($newdate));
@@ -5045,13 +5464,10 @@ $this->db->where('payment_number',$i);
                         $frequency = ($days * $ii) - $days;
                         $newdate = strtotime( $frequency . ' day', strtotime($date));
 
-                        //check if payment date landed on weekend
-                        //if Sunday, make it Monday. If Saturday, make it Friday
-//						if (date('D', $newdate) == 'Sun') {
-//							$newdate = strtotime('+1 day', $newdate);
-//						} elseif (date('D', $newdate) == 'Sat') {
-//							$newdate = strtotime('-1 day', $newdate);
-//						}
+                        //check if payment date landed on Sunday, push to Monday
+                        if (date('D', $newdate) == 'Sun') {
+                            $newdate = strtotime('+1 day', $newdate);
+                        }
 
 //						$newdate = date('Y-m-d', $newdate);
 //						if($ii==1){
@@ -5112,13 +5528,10 @@ $this->db->where('payment_number',$i);
                         $frequency =  $ii;
                         $newdate = strtotime('+' . $frequency . ' month', strtotime($date));
 
-                        //check if payment date landed on weekend
-                        //if Sunday, make it Monday. If Saturday, make it Friday
-//						if (date('D', $newdate) == 'Sun') {
-//							$newdate = strtotime('+1 day', $newdate);
-//						} elseif (date('D', $newdate) == 'Sat') {
-//							$newdate = strtotime('-1 day', $newdate);
-//						}
+                        //check if payment date landed on Sunday, push to Monday
+                        if (date('D', $newdate) == 'Sun') {
+                            $newdate = strtotime('+1 day', $newdate);
+                        }
 
                         $newdate = date('Y-m-d', $newdate);
 
@@ -5185,16 +5598,57 @@ $this->db->where('payment_number',$i);
 //		echo $lamount;
 //		print_r($loan);
 //		exit();
+		// DEBUG: Log loan method and frequency
+		//var_dump("LOAN DEBUG - Method: '{$loan->method}', Frequency: '{$loan->frequency}', Product ID: {$product_id}");
+		
 		if($loan->method=="Straight line" && $loan->frequency=="Weekly"){
 			$principal = (($loan->processing_fees/100)*$amount)+$amount;
 			$p = $amount;
-			$this->add_amortization_straight_weekly($p,$principal, $product_id, $lmonths, $ldate,$loan_customer,$customer_type,$worthness_file,$narration,$added_by, $funds_source);
-		}elseif($loan->method=="Straight line" && $loan->frequency=="Bi weekly"){
+			return $this->add_amortization_straight_weekly($p,$principal, $product_id, $lmonths, $ldate,$loan_customer,$customer_type,$worthness_file,$narration,$added_by, $funds_source, $batch, $from_group, $group_id);
+		}
+        elseif($loan->method=="Straight line" && $loan->frequency=="Bi weekly")
+        {
         $principal = (($loan->processing_fees/100)*$amount)+$amount;
         $p = $amount;
-        $this->add_amortization_biweekly($p,$principal, $product_id, $lmonths, $ldate,$loan_customer,$customer_type,$worthness_file,$narration,$added_by, $funds_source);
+        return $this->add_amortization_biweekly($p,$principal, $product_id, $lmonths, $ldate,$loan_customer,$customer_type,$worthness_file,$narration,$added_by, $funds_source, $batch, $from_group, $group_id);
+        }
+        elseif($loan->method == "Reducing balance" && $loan->frequency == "Weekly")
+        {
+        // For Reducing Balance Weekly, processing fee is added to principal before calculation
+        // var_dump("LOAN DEBUG - Taking Reducing Balance Weekly path");
+      
+      $principal = (($loan->processing_fees/100)*$amount)+$amount;
+      $p = $amount;
+         
+      $r =   $this->add_reducing_balance_weekly($p,$principal, $lmonths, $product_id, $ldate, $loan_customer, $customer_type, $worthness_file, $narration, $added_by, $branch, $funds_source, $batch, $from_group, $group_id);
+    //   var_dump($r);
+    //   exit();
+      return $r;
+    }
+        elseif($loan->method == "Reducing balance" && $loan->frequency == "Bi weekly"){
+        // For Reducing Balance Bi-weekly, processing fee is added to principal before calculation
+        error_log("LOAN DEBUG - Taking Reducing Balance Bi-weekly path");
+        return $this->add_reducing_balance_biweekly($amount, $lmonths, $product_id, $ldate, $loan_customer, $customer_type, $worthness_file, $narration, $added_by, $branch, $funds_source, $batch, $from_group, $group_id);
     }
         else {
+			// For Reducing Balance + Weekly/Bi-weekly, add processing fee to principal FIRST
+			error_log("LOAN DEBUG - Taking ELSE path");
+			$original_principal = $amount;
+			if(strcasecmp(trim($loan->method), "Reducing Balance") == 0 && (strcasecmp(trim($loan->frequency), "Weekly") == 0 || strcasecmp(trim($loan->frequency), "Bi weekly") == 0)) {
+				// Get processing fee
+				if(isset($loan->processing_fees)) {
+					$processing_fee_percent = $loan->processing_fees;
+				} elseif(isset($loan->processing_fee)) {
+					$processing_fee_percent = $loan->processing_fee;
+				} else {
+					$processing_fee_percent = 0;
+				}
+
+				// Calculate processing fee and add to principal
+				$processing_fee_amount = ($processing_fee_percent / 100) * $amount;
+				$amount = $amount + $processing_fee_amount; // NEW PRINCIPAL includes processing fee
+			}
+
 			//divisor
 			switch ($loan->frequency) {
 				case 'Monthly':
@@ -5372,7 +5826,7 @@ $this->db->where('payment_number',$i);
 			//insert each payment records to lend_payments
 			if ($loan->frequency == 'Bi weekly') {
 				$date = $loan_date;
-				$frequency = $months * 2;
+				$frequency = $months;  // Fixed: Don't multiply by 2 - months already represents bi-weekly periods
 				$start_day = 0;
 				$loan_day = date('d', strtotime($date));
 				$loan_month = date('m', strtotime($date));
@@ -5456,13 +5910,10 @@ $this->db->where('payment_number',$i);
 					$frequency = $days * $ii;
 					$newdate = strtotime('+' . $frequency . ' day', strtotime($date));
 
-					//check if payment date landed on weekend
-					//if Sunday, make it Monday. If Saturday, make it Friday
-//					if (date('D', $newdate) == 'Sun') {
-//						$newdate = strtotime('+1 day', $newdate);
-//					} elseif (date('D', $newdate) == 'Sat') {
-//						$newdate = strtotime('-1 day', $newdate);
-//					}
+					//check if payment date landed on Sunday, push to Monday
+					if (date('D', $newdate) == 'Sun') {
+						$newdate = strtotime('+1 day', $newdate);
+					}
 
 					$newdate = date('Y-m-d', $newdate);
 
@@ -5517,13 +5968,10 @@ $this->db->where('payment_number',$i);
 						$frequency = $days * $ii;
 						$newdate = strtotime('+' . $frequency . ' day', strtotime($date));
 
-						//check if payment date landed on weekend
-						//if Sunday, make it Monday. If Saturday, make it Friday
-//						if (date('D', $newdate) == 'Sun') {
-//							$newdate = strtotime('+1 day', $newdate);
-//						} elseif (date('D', $newdate) == 'Sat') {
-//							$newdate = strtotime('-1 day', $newdate);
-//						}
+						//check if payment date landed on Sunday, push to Monday
+						if (date('D', $newdate) == 'Sun') {
+							$newdate = strtotime('+1 day', $newdate);
+						}
 
 						$newdate = date('Y-m-d', $newdate);
 						$newdate = date('Y-m-t', strtotime($newdate));
@@ -5579,13 +6027,10 @@ $this->db->where('payment_number',$i);
 						$frequency = ($days * $ii) - $days;
 						$newdate = strtotime( $frequency . ' day', strtotime($date));
 
-						//check if payment date landed on weekend
-						//if Sunday, make it Monday. If Saturday, make it Friday
-//						if (date('D', $newdate) == 'Sun') {
-//							$newdate = strtotime('+1 day', $newdate);
-//						} elseif (date('D', $newdate) == 'Sat') {
-//							$newdate = strtotime('-1 day', $newdate);
-//						}
+						//check if payment date landed on Sunday, push to Monday
+						if (date('D', $newdate) == 'Sun') {
+							$newdate = strtotime('+1 day', $newdate);
+						}
 
 //						$newdate = date('Y-m-d', $newdate);
 //						if($ii==1){
@@ -5646,13 +6091,10 @@ $this->db->where('payment_number',$i);
 						$frequency =  $ii;
 						$newdate = strtotime('+' . $frequency . ' month', strtotime($date));
 
-						//check if payment date landed on weekend
-						//if Sunday, make it Monday. If Saturday, make it Friday
-//						if (date('D', $newdate) == 'Sun') {
-//							$newdate = strtotime('+1 day', $newdate);
-//						} elseif (date('D', $newdate) == 'Sat') {
-//							$newdate = strtotime('-1 day', $newdate);
-//						}
+						//check if payment date landed on Sunday, push to Monday
+						if (date('D', $newdate) == 'Sun') {
+							$newdate = strtotime('+1 day', $newdate);
+						}
 
 						$newdate = date('Y-m-d', $newdate);
 
@@ -5980,13 +6422,10 @@ $this->db->where('payment_number',$i);
                     $frequency = $days * $ii;
                     $newdate = strtotime('+' . $frequency . ' day', strtotime($date));
 
-                    //check if payment date landed on weekend
-                    //if Sunday, make it Monday. If Saturday, make it Friday
-//					if (date('D', $newdate) == 'Sun') {
-//						$newdate = strtotime('+1 day', $newdate);
-//					} elseif (date('D', $newdate) == 'Sat') {
-//						$newdate = strtotime('-1 day', $newdate);
-//					}
+                    //check if payment date landed on Sunday, push to Monday
+                    if (date('D', $newdate) == 'Sun') {
+                        $newdate = strtotime('+1 day', $newdate);
+                    }
 
                     $newdate = date('Y-m-d', $newdate);
                     $this->db->where('loan_id',$id);
@@ -6041,13 +6480,10 @@ $this->db->where('payment_number',$i);
                         $frequency = $days * $ii;
                         $newdate = strtotime('+' . $frequency . ' day', strtotime($date));
 
-                        //check if payment date landed on weekend
-                        //if Sunday, make it Monday. If Saturday, make it Friday
-//						if (date('D', $newdate) == 'Sun') {
-//							$newdate = strtotime('+1 day', $newdate);
-//						} elseif (date('D', $newdate) == 'Sat') {
-//							$newdate = strtotime('-1 day', $newdate);
-//						}
+                        //check if payment date landed on Sunday, push to Monday
+                        if (date('D', $newdate) == 'Sun') {
+                            $newdate = strtotime('+1 day', $newdate);
+                        }
 
                         $newdate = date('Y-m-d', $newdate);
                         $newdate = date('Y-m-t', strtotime($newdate));
@@ -6104,13 +6540,10 @@ $this->db->where('payment_number',$i);
                         $frequency = ($days * $ii) - $days;
                         $newdate = strtotime( $frequency . ' day', strtotime($date));
 
-                        //check if payment date landed on weekend
-                        //if Sunday, make it Monday. If Saturday, make it Friday
-//						if (date('D', $newdate) == 'Sun') {
-//							$newdate = strtotime('+1 day', $newdate);
-//						} elseif (date('D', $newdate) == 'Sat') {
-//							$newdate = strtotime('-1 day', $newdate);
-//						}
+                        //check if payment date landed on Sunday, push to Monday
+                        if (date('D', $newdate) == 'Sun') {
+                            $newdate = strtotime('+1 day', $newdate);
+                        }
 
 //						$newdate = date('Y-m-d', $newdate);
 //						if($ii==1){
@@ -6171,13 +6604,10 @@ $this->db->where('payment_number',$i);
                         $frequency =  $ii;
                         $newdate = strtotime('+' . $frequency . ' month', strtotime($date));
 
-                        //check if payment date landed on weekend
-                        //if Sunday, make it Monday. If Saturday, make it Friday
-//						if (date('D', $newdate) == 'Sun') {
-//							$newdate = strtotime('+1 day', $newdate);
-//						} elseif (date('D', $newdate) == 'Sat') {
-//							$newdate = strtotime('-1 day', $newdate);
-//						}
+                        //check if payment date landed on Sunday, push to Monday
+                        if (date('D', $newdate) == 'Sun') {
+                            $newdate = strtotime('+1 day', $newdate);
+                        }
 
                         $newdate = date('Y-m-d', $newdate);
                         $this->db->where('loan_id',$id);
@@ -6890,7 +7320,7 @@ $this->db->where('payment_number',$i);
 		}
 
 		// Return the amortization schedule
-		$table = $table . "<tr style='color: white; background-color: #0e9970'>";
+		$table = $table . "<tr style='color: white; background-color: #2a389d'>";
 		$table = $table . "<td width='30'>-</td>";
 		$table = $table . "<td width='30'>-</td>";
 
@@ -6917,7 +7347,7 @@ $this->db->where('payment_number',$i);
 			->join('loan_products','loan_products.loan_product_id =loan.loan_product')
             ->join('employees','employees.id = loan.loan_added_by')
             ->join('funds_source','funds_source.funds_source = loan.funds_source', 'left')
-            ->join('customer_groups','customer_groups.customer = loan.loan_customer AND loan.customer_type = "individual"', 'left')
+            ->join('customer_groups','customer_groups.customer = loan.loan_customer AND loan.from_group = "Yes"', 'left')
             ->join('groups','groups.group_id = customer_groups.group_id', 'left');
         $this->db->where("loan_status !=", "DELETED");
 
@@ -7161,7 +7591,7 @@ $this->db->where('payment_number',$i);
 		$this->db->join('individual_customers', 'loan.loan_customer = individual_customers.id', 'left');
 		$this->db->join('groups', 'loan.loan_customer = groups.group_id', 'left');
 		$this->db->join('funds_source', 'funds_source.funds_source = loan.funds_source', 'left');
-		$this->db->join('customer_groups', 'customer_groups.customer = loan.loan_customer AND loan.customer_type = "individual"', 'left');
+		$this->db->join('customer_groups', 'customer_groups.customer = loan.loan_customer AND loan.from_group = "Yes"', 'left');
 		$this->db->join('groups member_groups', 'member_groups.group_id = customer_groups.group_id', 'left');
         if ($branch != "All") {
             $this->db->where("(individual_customers.branch = '$branch' OR groups.branch = '$branchgp')");

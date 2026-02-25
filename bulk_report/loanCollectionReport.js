@@ -108,10 +108,15 @@ async function getCollectionsData(branch, loanOfficer, fromDate, toDate, reportI
                    employees.Firstname as loan_officer_firstname,
                    employees.Lastname as loan_officer_lastname,
                    b.BranchName as branch_name,
-                   b.Code as branch_code
+                   b.Code as branch_code,
+                   CASE
+                       WHEN l.customer_type = 'group' THEN g.group_name
+                       ELSE 'N/A'
+                   END AS customer_group_name
             FROM loan l
                      LEFT JOIN employees ON employees.id = l.loan_added_by
                      LEFT JOIN branches b ON b.id = l.branch
+                     LEFT JOIN \`groups\` g ON l.loan_customer = g.group_id AND l.customer_type = 'group'
                 ${whereClause}
         `;
 
@@ -186,6 +191,7 @@ async function getCollectionsData(branch, loanOfficer, fromDate, toDate, reportI
                         loan_id: loan.loan_id,
                         loan_number: loan.loan_number,
                         customer_name: customerName,
+                        customer_group_name: loan.customer_group_name || 'N/A',
                         amount_disbursed: loan.loan_principal,
                         branch_name: loan.branch_name || 'N/A',
                         loan_officer: `${loan.loan_officer_firstname || ''} ${loan.loan_officer_lastname || ''}`.trim() || 'N/A'
@@ -394,6 +400,7 @@ function generateHtml(collections, filterOptions) {
             <td>${collection.branch_name || 'N/A'}</td>
             <td>${collection.loan_number}</td>
             <td>${collection.customer_name}</td>
+            <td>${collection.customer_group_name || 'N/A'}</td>
             <td>${formatCurrency(collection.amount_disbursed)}</td>
             <td>${formatCurrency(collection.expected_collection)}</td>
             <td>${formatCurrency(collection.amount_collected)}</td>
@@ -561,27 +568,27 @@ function generateHtml(collections, filterOptions) {
                     <thead>
                         <!-- Filter information rows (included in export) -->
                         <tr class="filter-header">
-                            <td colspan="10">Loan Collections Report - Filter Information</td>
+                            <td colspan="11">Loan Collections Report - Filter Information</td>
                         </tr>
                         <tr class="report-info">
                             <td colspan="2">Branch:</td>
-                            <td colspan="8">${filterOptions.branch_name || 'All Branches'}</td>
+                            <td colspan="9">${filterOptions.branch_name || 'All Branches'}</td>
                         </tr>
                         <tr class="report-info">
                             <td colspan="2">Loan Officer:</td>
-                            <td colspan="8">${filterOptions.officer_name || 'All Officers'}</td>
+                            <td colspan="9">${filterOptions.officer_name || 'All Officers'}</td>
                         </tr>
                         <tr class="report-info">
                             <td colspan="2">Date Range:</td>
-                            <td colspan="8">${dateFilterText}</td>
+                            <td colspan="9">${dateFilterText}</td>
                         </tr>
                         <tr class="report-info">
                             <td colspan="2">Report Date:</td>
-                            <td colspan="8">${moment().format('YYYY-MM-DD HH:mm:ss')}</td>
+                            <td colspan="9">${moment().format('YYYY-MM-DD HH:mm:ss')}</td>
                         </tr>
                         <!-- Empty row for spacing -->
                         <tr>
-                            <td colspan="10">&nbsp;</td>
+                            <td colspan="11">&nbsp;</td>
                         </tr>
                         <!-- Data header row -->
                         <tr>
@@ -589,6 +596,7 @@ function generateHtml(collections, filterOptions) {
                             <th>Branch</th>
                             <th>Loan Number</th>
                             <th>Customer</th>
+                            <th>Customer Group</th>
                             <th>Amount Disbursed (MWK)</th>
                             <th>Expected Collection to Date (MWK)</th>
                             <th>Amount Collected (MWK)</th>
@@ -602,7 +610,7 @@ function generateHtml(collections, filterOptions) {
                     </tbody>
                     <tfoot>
                         <tr>
-                            <td colspan="4">Totals</td>
+                            <td colspan="5">Totals</td>
                             <td>${formatCurrency(totalDisbursed)}</td>
                             <td>${formatCurrency(totalExpected)}</td>
                             <td>${formatCurrency(totalCollected)}</td>

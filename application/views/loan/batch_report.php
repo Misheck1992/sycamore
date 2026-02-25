@@ -118,6 +118,23 @@ $imgg = 'data:image;base64,'.base64_encode(file_get_contents($linkk))
 			text-align: center;
 		}
 
+		/* Payment schedule specific styles */
+		#pattern-style-a thead th {
+			font-size: 11px;
+			padding: 6px 4px;
+			white-space: nowrap;
+		}
+
+		#pattern-style-a tbody td {
+			font-size: 10px;
+			padding: 4px 3px;
+			text-align: center;
+		}
+
+		#pattern-style-a tbody tr:nth-child(even) {
+			background-color: #f9f9f9;
+		}
+
 	</style>
 
 </head><body>
@@ -228,7 +245,7 @@ $imgg = 'data:image;base64,'.base64_encode(file_get_contents($linkk))
 	</div>
 
 	<div class="section">
-		<div class="title">Payment Schedule - Loan <?php echo chr(64 + $loan_counter); ?></div>
+		<div class="title">Payment Schedule (Amortization) - Loan <?php echo chr(64 + $loan_counter); ?></div>
 		<br>
 		<div class="content">
 			<table class="collapse" id="pattern-style-a">
@@ -236,49 +253,51 @@ $imgg = 'data:image;base64,'.base64_encode(file_get_contents($linkk))
 				<tr>
 					<th>Pay #</th>
 					<th>Date Due</th>
-					<th><?php if ($loan->period_type == "2 Weeks"){ echo "Principal + Other Charges";}else{echo "Principal";} ?>(<?php echo $settings->currency ?>)</th>
-					<th>Interest + Charges(<?php echo $settings->currency ?>)</th>
-					<th>Amount Due(<?php echo $settings->currency ?>)</th>
+					<th>Principal(<?php echo $settings->currency ?>)</th>
+					<th>Interest(<?php echo $settings->currency ?>)</th>
+					<th>Admin Fee(<?php echo $settings->currency ?>)</th>
+					<th>Loan Cover(<?php echo $settings->currency ?>)</th>
+					<th>Total Amount(<?php echo $settings->currency ?>)</th>
 					<th>Amount Paid(<?php echo $settings->currency ?>)</th>
-					<th>Theoretical Bal*(<?php echo $settings->currency ?>)</th>
-					<th>Actual Bal(<?php echo $settings->currency ?>)</th>
+					<th>Balance(<?php echo $settings->currency ?>)</th>
 					<th>Status</th>
-
 				</tr>
 				</thead>
 				<tbody>
 				<?php
-				$outstanding_balance = get_loan_outstanding_balance($loan->loan_id);
-				foreach ($payments as $p){
-					?>
-					<?php
-					$css = '';
-					$xstatus = '';
-					if($p->payment_schedule < date('Y-m-d')   AND $p->status == 'NOT PAID') {
-						$css = ' class="due"';
-						$xstatus = ' | OVER DUE';
-					} elseif($p->status=='PAID') {
-						$css = 'class="paid"';
-					} elseif($p->payment_schedule == date('Y-m-d')  AND $p->status == 'NOT PAID') {
-						$css = ' class="due_now"';
-						$xstatus = ' | DUE TODAY';
+				if(!empty($payments)) {
+					$outstanding_balance = get_loan_outstanding_balance($loan->loan_id);
+					foreach ($payments as $p){
+						$css = '';
+						$xstatus = '';
+						if($p->payment_schedule < date('Y-m-d') AND $p->status == 'NOT PAID') {
+							$css = ' style="background-color: #ffdddd;"';
+							$xstatus = ' | OVERDUE';
+						} elseif($p->status=='PAID') {
+							$css = ' style="background-color: #ddffdd;"';
+						} elseif($p->payment_schedule == date('Y-m-d') AND $p->status == 'NOT PAID') {
+							$css = ' style="background-color: #ffffdd;"';
+							$xstatus = ' | DUE TODAY';
+						}
+						?>
+						<tr>
+							<td<?php echo $css; ?>><?php echo $p->payment_number?></td>
+							<td<?php echo $css; ?>><?php echo $p->payment_schedule?></td>
+							<td<?php echo $css; ?>><?php echo number_format($p->principal, 2) ?></td>
+							<td<?php echo $css; ?>><?php echo number_format($p->interest, 2) ?></td>
+							<td<?php echo $css; ?>><?php echo number_format($p->padmin_fee, 2) ?></td>
+							<td<?php echo $css; ?>><?php echo number_format($p->ploan_cover, 2) ?></td>
+							<td<?php echo $css; ?>><strong><?php echo number_format($p->amount, 2) ?></strong></td>
+							<td<?php echo $css; ?>><?php echo number_format($p->paid_amount, 2)?></td>
+							<td<?php echo $css; ?>><?php echo number_format($p->loan_balance, 2)?></td>
+							<td<?php echo $css; ?>><?php echo $p->status.$xstatus; ?></td>
+						</tr>
+						<?php
 					}
-					?>
-					<tr>
-						<td <?php echo $css; ?>><?php  echo $p->payment_number?></td>
-						<td <?php echo $css; ?>><?php  echo $p->payment_schedule?></td>
-						<td <?php echo $css; ?>><?php  echo number_format($p->principal,2) ?></td>
-						<td <?php echo $css; ?>><?php  echo number_format($p->interest,2) ?></td>
-						<td <?php echo $css; ?>><?php  echo number_format($p->amount,2) ?></td>
-						<td <?php echo $css; ?>><?php  echo number_format($p->paid_amount,2)?></td>
-						<td <?php echo $css; ?>><?php  echo number_format($p->loan_balance,2)?></td>
-						<td <?php echo $css; ?>><?php  echo number_format($outstanding_balance,2)?></td>
-						<td><?php echo $p->status.$xstatus; ?></td>
-					</tr>
-					<?php
+				} else {
+					echo '<tr><td colspan="10" style="text-align:center;">No payment schedule found</td></tr>';
 				}
 				?>
-
 				</tbody>
 			</table>
 		</div>

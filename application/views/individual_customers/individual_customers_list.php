@@ -11,7 +11,7 @@
         </div>
     </div>
     <div class="card">
-        <div class="card-body" style="border: thick #24C16B solid;border-radius: 14px;">
+        <div class="card-body" style="border: thick #2a389d solid;border-radius: 14px;">
             <div>
                 <?php
                 $products = get_all('geo_countries');

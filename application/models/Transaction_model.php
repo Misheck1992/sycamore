@@ -20,6 +20,16 @@ class Transaction_model extends CI_Model
         $this->db->where('transaction_type !=', 'other');
         return $this->db->get($this->table)->result();
     }
+    function track_all_transactions()
+    {
+        $this->db->select('transaction.*');
+        $this->db->from($this->table);
+        $this->db->join('loan', 'loan.loan_number = transaction.account_number');
+        $this->db->where('transaction_type !=', 'other');
+        $this->db->order_by('transaction.account_number', 'ASC');
+        $this->db->order_by('transaction.system_time', 'DESC');
+        return $this->db->get()->result();
+    }
     // get all
     function get_all()
     {

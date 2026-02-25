@@ -1,6 +1,86 @@
 <?php
 $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_id,$loan_id);
 ?>
+<style>
+/* Enhanced scrollable table styles */
+.scrollable-table-container {
+    overflow-x: auto;
+    max-width: 100%;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    background: white;
+}
+
+.scrollable-table-container::-webkit-scrollbar {
+    height: 8px;
+}
+
+.scrollable-table-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.scrollable-table-container::-webkit-scrollbar-thumb {
+    background: #153505;
+    border-radius: 4px;
+}
+
+.scrollable-table-container::-webkit-scrollbar-thumb:hover {
+    background: #0d2503;
+}
+
+.scrollable-table {
+    width: 100%;
+    min-width: 1200px;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.scrollable-table th {
+    background-color: #153505;
+    color: white;
+    padding: 12px 8px;
+    text-align: left;
+    font-weight: 600;
+    border: 1px solid #0d2503;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.scrollable-table td {
+    padding: 10px 8px;
+    border: 1px solid #ddd;
+    white-space: nowrap;
+}
+
+.scrollable-table tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.scrollable-table tbody tr:hover {
+    background-color: #f0f8f0;
+}
+
+/* Status styling */
+.scrollable-table .due {
+    background-color: #ffebee !important;
+    color: #c62828;
+    font-weight: bold;
+}
+
+.scrollable-table .due_now {
+    background-color: #fff3e0 !important;
+    color: #ef6c00;
+    font-weight: bold;
+}
+
+.scrollable-table .paid {
+    background-color: #e8f5e8 !important;
+    color: #2e7d32;
+}
+</style>
 <div class="main-content">
     <div class="page-header">
         <h2 class="header-title">Loan view</h2>
@@ -95,10 +175,10 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
                                 $total_b = 0;
                                 foreach ($payments as $ppp){
 
-                                    $total_b +=$pp->amount;
+                                    $total_b +=$ppp->amount;
 
                                 }
-                                echo number_format($total_b-$total_p,2);
+                                echo number_format(max(0, $total_b-$total_p),2);
                                 ?>
                             </td>
                         </tr>
@@ -162,7 +242,8 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
                 <div class="col-lg-7 border-right">
                     <h2>Overview</h2>
                     <hr>
-                    <table style="width: 100%;border-collapse: collapse;">
+                    <div class="scrollable-table-container">
+                    <table class="scrollable-table">
                         <thead>
                         <tr style="border: 1px solid black;">
                             <th>Payment #</th>
@@ -172,7 +253,8 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
                             <th>Interest</th>
                             <th>Admin fee</th>
                             <th>Loan cover</th>
-                            <th>Pay Amount</th>
+                            <th>Late Charges</th>
+                            <th>Total Pay Amount</th>
                             <th>Amount Paid</th>
                             <th>Loan Balance</th>
                             <th>Status</th>
@@ -206,11 +288,12 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
                                 <td <?php echo $css; ?>>MWK<?php  echo number_format($p->interest,2) ?></td>
                                 <td <?php echo $css; ?>>MWK<?php  echo number_format($p->padmin_fee,2) ?></td>
                                 <td <?php echo $css; ?>>MWK<?php  echo number_format($p->ploan_cover,2) ?></td>
-                                <td <?php echo $css; ?>>MWK<?php  echo number_format($p->amount,2) ?></td>
+                                <td <?php echo $css; ?>>MWK<?php  echo number_format($p->total_late_charge ?? 0, 2) ?></td>
+                                <td <?php echo $css; ?>>MWK<?php  echo number_format($p->total_pay_amount ?? $p->amount, 2) ?></td>
                                 <td <?php echo $css; ?>>MWK<?php  echo number_format($p->paid_amount,2)?></td>
-                                <td <?php echo $css; ?>>MWK<?php  echo number_format($p->loan_balance,2)?></td>
+                                <td <?php echo $css; ?>>MWK<?php  echo number_format(max(0, $p->loan_balance),2)?></td>
                                 <td width="150" <?php echo $css; ?>><span style="color:<?php echo $p->status=='PAID' ? 'GREEN' : 'RED'?>"><?php echo $p->status.$xstatus; if($p->partial_paid=="YES"){echo "-<font color='green'>(Partial paid)</font>";}?></span></td>
-                                <td <?php echo $css; ?> width="70"><?php if($xstatus !="") { ?> <?php  } ?></td>
+                                <td <?php echo $css; ?> width="70"></td>
                             </tr>
                             <?php
                         }
@@ -228,6 +311,7 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
                         <!--						</tr>-->
                         </tbody>
                     </table>
+                    </div>
                     <hr>
                     <h2>Collateral information</h2>
                     <?php
@@ -277,6 +361,26 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
                         <a href="<?php echo base_url('account/print_loan_receipt/').$last->id ?>" target="_blank" style="color: green;"><i class="fa fa-print fa-2x"></i>Latest Receipt</a>
                         <hr>
                         <?php
+                    }
+                    // Only show the latest non-reversed deposit for reversal
+                    $this->db->where('account_number', $loan_number);
+                    $this->db->where('credit >', 0);
+                    $this->db->where("(reversed IS NULL OR reversed != 'Yes')");
+                    $this->db->where("transaction_type != 'other'");
+                    $this->db->order_by('system_time', 'DESC');
+                    $this->db->limit(1);
+                    $latest_deposit = $this->db->get('transaction')->row();
+                    if(!empty($latest_deposit)){
+                    ?>
+                    <h5 style="color:#153505;margin-top:10px;">Latest Deposit</h5>
+                        <div style="border:1px solid #ddd;border-radius:6px;padding:8px;margin-bottom:6px;font-size:12px;">
+                            <div><strong>Ref:</strong> <?php echo $latest_deposit->transaction_id; ?></div>
+                            <div><strong>Amount:</strong> MWK<?php echo number_format($latest_deposit->credit,2); ?></div>
+                            <div><strong>Date:</strong> <?php echo $latest_deposit->system_time; ?></div>
+                            <a href="<?php echo base_url('Loan/transaction_reversal?tid='.$latest_deposit->transaction_id.'&account='.$loan_number)?>" class="btn btn-xs btn-danger" style="margin-top:4px;" onclick="return confirm('Are you sure you want to reverse this deposit of MWK<?php echo number_format($latest_deposit->credit,2); ?>? This is not recoverable.')"><i class="fa fa-undo"></i> Reverse</a>
+                        </div>
+                    <hr>
+                    <?php
                     }
                     if(empty($next_payment_details)){
                         echo "No more payments to make";
@@ -358,12 +462,15 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
                 <h4 class="onboarding-title" >Loan advance payments</h4>
                 <p style="color: red;">Are you sure you want to make advance payments ?</p>
                 <form action="<?php echo base_url('loan/pay_advance')?>" class="form-row" method="POST" >
-                    <table style="width: 100%;border-collapse: collapse;">
+                    <div class="scrollable-table-container">
+                    <table class="scrollable-table" style="min-width: 1000px;">
                         <thead>
                         <tr style="border: 1px solid black;">
                             <th>Payment #</th>
                             <th>Check Date</th>
                             <th>Amount</th>
+                            <th>Late Charges</th>
+                            <th>Total Amount</th>
                             <th>Amount Paid</th>
                             <th>Loan Balance</th>
                             <th>Status</th>
@@ -393,8 +500,10 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
                                 <td <?php echo $css; ?>><?php  echo $p->payment_number?></td>
                                 <td <?php echo $css; ?>><?php  echo $p->payment_schedule?></td>
                                 <td <?php echo $css; ?>>MK<?php  echo number_format($p->amount,2) ?></td>
+                                <td <?php echo $css; ?>>MK<?php  echo number_format($p->total_late_charge ?? 0, 2) ?></td>
+                                <td <?php echo $css; ?>>MK<?php  echo number_format($p->total_pay_amount ?? $p->amount, 2) ?></td>
                                 <td <?php echo $css; ?>>MK<?php  echo number_format($p->paid_amount,2)?></td>
-                                <td <?php echo $css; ?>>MK<?php  echo number_format($p->loan_balance,2)?></td>
+                                <td <?php echo $css; ?>>MK<?php  echo number_format(max(0, $p->loan_balance),2)?></td>
                                 <td width="150" <?php echo $css; ?>><span style="color:<?php echo $p->status=='PAID' ? 'GREEN' : 'RED'?>"><?php echo $p->status.$xstatus; if($p->partial_paid=="YES"){echo "-<font color='green'>(Partial paid)</font>";}?></span></td>
                                 <td <?php echo $css; ?> width="70"><?php if($p->status == 'NOT PAID') { ?>  <input type="checkbox" name="payment_number[]" value="<?php echo $p->payment_number  ?>" class="check-cls"><?php  } ?></td>
                             </tr>
@@ -406,6 +515,7 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
 
                         </tbody>
                     </table>
+                    </div>
 
                     <input type="text" name="loan_id" value="<?php echo $loan_id?>" hidden>
 

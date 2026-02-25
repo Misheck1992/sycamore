@@ -26,9 +26,9 @@ $settings = get_by_id('settings','settings_id','1');
 				<div class="row align-items-center w-100">
 					<div class="col-md-7 col-lg-5 m-h-auto">
 						<div class="card shadow-lg">
-							<div class="card-body" style="padding:2em; border: solid #24C16B thick;border-radius: 50px 0px 50px 0px;">
+							<div class="card-body" style="padding:2em; border: solid #2a389d thick;border-radius: 50px 0px 50px 0px;">
 								<div class="d-flex align-items-center justify-content-between m-b-30">
-									<img class="img-fluid" alt="" src="<?php echo base_url('uploads/632824996757d9865.png')?>">
+									<img class="img-fluid" alt="" src="<?php echo base_url('uploads/logo.JPEG')?>" style="max-width: 150px;">
 									<h2 class="m-b-0">Login</h2>
 								</div>
 							<?php
@@ -68,7 +68,7 @@ $settings = get_by_id('settings','settings_id','1');
 									<div class="form-group">
 										<div class="d-flex align-items-center justify-content-between">
 
-											<button class="btn  btn-block btn-sm" style="border:thin #24C16B solid; padding: 1em; background-color: #24C16B; color: white;">Sign In</button>
+											<button class="btn  btn-block btn-sm" style="border:thin #2a389d solid; padding: 1em; background-color: #2a389d; color: white;">Sign In</button>
 										</div>
 									</div>
 								</form>

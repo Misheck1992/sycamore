@@ -24,6 +24,7 @@ $products = get_all('loan');
 				<tr>
 					<th>#</th>
 					<th>Loan Customer</th>
+					<th>Customer Group</th>
 					<th>Loan Number</th>
 					<th>Check Date</th>
 					<th>Amount to collect</th>
@@ -54,6 +55,7 @@ $products = get_all('loan');
 
 						<td><?php echo $n ?></td>
                         <td><a href="<?php echo base_url($preview_url).$loan->loan_customer?>""><?php echo $customer_name?></a></td>
+						<td><?php echo isset($loan->customer_group_name) ? $loan->customer_group_name : 'N/A' ?></td>
 
 						<td><a href="<?php echo base_url('loan/view/').$loan->loan_id?>"><?php echo $loan->loan_number ?></a></td>
 

@@ -192,7 +192,122 @@ class Activity_logger extends CI_Controller
         }
     }
 
-    public function _rules() 
+    public function export_excel()
+    {
+        // Get filter parameters
+        $employee_id = $this->input->get('employee_id');
+        $date_from = $this->input->get('date_from');
+        $date_to = $this->input->get('date_to');
+        $search = $this->input->get('search');
+
+        // Get all filtered data
+        $activity_data = $this->Activity_logger_model->get_all_filtered_data($employee_id, $date_from, $date_to, $search);
+
+        // Set headers for Excel download
+        $filename = 'Activity_Logger_' . date('YmdHis') . '.xls';
+        header("Content-Type: application/vnd.ms-excel");
+        header("Content-Disposition: attachment; filename=\"$filename\"");
+        header("Pragma: no-cache");
+        header("Expires: 0");
+
+        // Get employee name if filtered
+        $employee_name = 'All Employees';
+        if ($employee_id) {
+            $employees = $this->Activity_logger_model->get_all_employees();
+            foreach ($employees as $emp) {
+                if ($emp->id == $employee_id) {
+                    $employee_name = $emp->Firstname . ' ' . $emp->Lastname;
+                    break;
+                }
+            }
+        }
+
+        // Output Excel content
+        echo '<html xmlns:x="urn:schemas-microsoft-com:office:excel">';
+        echo '<head>';
+        echo '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />';
+        echo '<style>';
+        echo 'table { border-collapse: collapse; width: 100%; }';
+        echo 'th, td { border: 1px solid #000; padding: 8px; text-align: left; }';
+        echo 'th { background-color: #4CAF50; color: white; font-weight: bold; }';
+        echo '.header { font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 10px; }';
+        echo '.filter-info { background-color: #f0f0f0; padding: 10px; margin-bottom: 15px; }';
+        echo '</style>';
+        echo '</head>';
+        echo '<body>';
+
+        // Header
+        echo '<div class="header">Activity Logger Report</div>';
+        echo '<div class="header" style="font-size: 12px;">Generated: ' . date('Y-m-d H:i:s') . '</div>';
+        echo '<br>';
+
+        // Filter info
+        echo '<div class="filter-info">';
+        echo '<strong>Applied Filters:</strong><br>';
+        echo '<strong>Employee:</strong> ' . $employee_name . '<br>';
+        if ($date_from || $date_to) {
+            echo '<strong>Date Range:</strong> ';
+            if ($date_from && $date_to) {
+                echo $date_from . ' to ' . $date_to;
+            } elseif ($date_from) {
+                echo 'From ' . $date_from;
+            } elseif ($date_to) {
+                echo 'Up to ' . $date_to;
+            }
+            echo '<br>';
+        }
+        if ($search) {
+            echo '<strong>Search Term:</strong> ' . htmlspecialchars($search) . '<br>';
+        }
+        echo '<strong>Total Records:</strong> ' . count($activity_data);
+        echo '</div>';
+        echo '<br>';
+
+        // Data table
+        echo '<table>';
+        echo '<thead>';
+        echo '<tr>';
+        echo '<th>#</th>';
+        echo '<th>Full Name</th>';
+        echo '<th>Email</th>';
+        echo '<th>Role</th>';
+        echo '<th>Activity</th>';
+        echo '<th>Date & Time</th>';
+        echo '</tr>';
+        echo '</thead>';
+        echo '<tbody>';
+
+        if (!empty($activity_data)) {
+            $serial = 1;
+            foreach ($activity_data as $activity) {
+                echo '<tr>';
+                echo '<td>' . $serial . '</td>';
+                echo '<td>' . htmlspecialchars($activity->Firstname . ' ' . $activity->Lastname) . '</td>';
+                echo '<td>' . htmlspecialchars($activity->EmailAddress ?: 'N/A') . '</td>';
+                echo '<td>' . htmlspecialchars($activity->role_name ?: 'No Role') . '</td>';
+                echo '<td>' . htmlspecialchars($activity->activity) . '</td>';
+                echo '<td>';
+                if (!empty($activity->server_time)) {
+                    echo date('M d, Y g:i A', strtotime($activity->server_time));
+                } else {
+                    echo 'N/A';
+                }
+                echo '</td>';
+                echo '</tr>';
+                $serial++;
+            }
+        } else {
+            echo '<tr><td colspan="6" style="text-align:center;">No activity logs found</td></tr>';
+        }
+
+        echo '</tbody>';
+        echo '</table>';
+        echo '</body>';
+        echo '</html>';
+        exit;
+    }
+
+    public function _rules()
     {
 	$this->form_validation->set_rules('user_id', 'user id', 'trim|required');
 	$this->form_validation->set_rules('activity', 'activity', 'trim|required');

@@ -1114,7 +1114,7 @@ class Loan extends CI_Controller
         }
 
         // Return the amortization schedule
-        $table = $table . "<tr style='color: white; background-color: #0e9970'>";
+        $table = $table . "<tr style='color: white; background-color: #2a389d'>";
         $table = $table . "<td width='30'>-</td>";
         $table = $table . "<td width='30'>-</td>";
 
@@ -1437,6 +1437,8 @@ class Loan extends CI_Controller
                 $this->db->where('transaction_id',$tid)->update('transaction', array('reversed'=>'Yes'));
                 if ($res == 'success') {
                     $reverse_loans_repayments = $this->db->where('ref',$trans_id)->get('transactions')->result();
+                    $schedules_reversed = 0;
+                    $affected_loan_id = null;
                     foreach ($reverse_loans_repayments as $to_act){
 
                         $get_schedules = $this->db->where('loan_id',$to_act->loan_id)->where('payment_number',$to_act->payment_number)
@@ -1446,12 +1448,24 @@ class Loan extends CI_Controller
                         $to_update_amount = $to_remove_amount-$to_act->amount;
                         if($to_update_amount <=0){
                             $this->db->where('id',$get_schedules->id)->update('payement_schedules',array('paid_amount'=>$to_update_amount,"status"=>"NOT PAID","partial_paid"=>"NO"));
+                            $schedules_reversed++;
                         }else{
                             $this->db->where('id',$get_schedules->id)->update('payement_schedules',array('paid_amount'=>$to_update_amount));
 
                         }
                         $this->db->where('loan_id',$to_act->loan_id)->update('loan',array('loan_status'=>"ACTIVE"));
+                        $affected_loan_id = $to_act->loan_id;
                     }
+
+                    // Adjust next_payment_id by subtracting the number of fully reversed schedules
+                    if($affected_loan_id && $schedules_reversed > 0){
+                        $loan_row = $this->db->where('loan_id', $affected_loan_id)->get('loan')->row();
+                        if($loan_row){
+                            $new_next = max(1, $loan_row->next_payment_id - $schedules_reversed);
+                            $this->db->where('loan_id', $affected_loan_id)->update('loan', array('next_payment_id' => $new_next));
+                        }
+                    }
+
                     $this->toaster->success('Transaction reversal was successful');
                     redirect($_SERVER['HTTP_REFERER']);
                 }
@@ -1816,9 +1830,38 @@ class Loan extends CI_Controller
         $tid = "TR-S" . rand(100, 9999) . date('Y') . date('m') . date('d');
         $mode = 'deposit';
         if(!empty($get_account)){
-            $r =	$this->Payement_schedules_model->new_pay_new($loan_number, $pay_number, $amount, $proof,$tid);
+            // Check if there are late charges for this payment schedule
+            $this->db->select('total_late_charge');
+            $this->db->from('payement_schedules');
+            $this->db->where('loan_id', $loan_number);
+            $this->db->where('payment_number', $pay_number);
+            $schedule = $this->db->get()->row();
 
-            if(!empty($r)){
+            $has_late_charges = ($schedule && ($schedule->total_late_charge ?? 0) > 0);
+
+            // Use appropriate payment method based on late charges
+            if ($has_late_charges) {
+                $r = $this->Payement_schedules_model->pay_loan_with_late_charges($loan_number, $pay_number, $amount, $proof, $tid);
+            } else {
+                $r = $this->Payement_schedules_model->new_pay_new($loan_number, $pay_number, $amount, $proof, $tid);
+            }
+
+            // Handle different return types
+            $payment_successful = false;
+            $allocation_info = "";
+
+            if (is_array($r) && isset($r['success']) && $r['success']) {
+                // New payment method with late charges
+                $payment_successful = true;
+                if (isset($r['allocation_log'])) {
+                    $allocation_info = " | Payment Allocation: " . implode(', ', $r['allocation_log']);
+                }
+            } elseif (!empty($r)) {
+                // Traditional payment method
+                $payment_successful = true;
+            }
+
+            if($payment_successful){
                 $teller_account = $get_account->account;
                 $this->Account_model->cash_transaction_modified($teller_account,$loan_n->loan_number,$amount,$mode,$tid,$proof,'deposit');
 
@@ -1834,7 +1877,8 @@ class Loan extends CI_Controller
                                   ' | Amount: MWK ' . number_format($amount, 2) .
                                   ' | Client: ' . $customer_data['customer_name'] .
                                   ' | Loan #: ' . (!empty($customer_data['loan_details']) ? $customer_data['loan_details']->loan_number : $loan_number) .
-                                  ' | Payment #: ' . $pay_number
+                                  ' | Payment #: ' . $pay_number .
+                                  $allocation_info
                 );
                 log_activity($logger);
 
@@ -2200,6 +2244,18 @@ class Loan extends CI_Controller
     function view($id){
         $row = $this->Loan_model->get_by_id($id);
         $payments = $this->Payement_schedules_model->get_all_by_id($row->loan_id);
+
+        // Load late charges model
+        $this->load->model('Late_charges_model');
+
+        // Add late charges data to each payment schedule
+        foreach ($payments as &$payment) {
+            // Get late charge for this payment schedule (default to 0 if not set)
+            $payment->total_late_charge = isset($payment->total_late_charge) ? $payment->total_late_charge : 0;
+
+            // Calculate total pay amount including late charges
+            $payment->total_pay_amount = $payment->amount + $payment->total_late_charge;
+        }
 
         if($row->customer_type=='group'){
             $group = $this->Groups_model->get_by_id($row->loan_customer);
@@ -2607,30 +2663,40 @@ class Loan extends CI_Controller
     }
     
     function batch_report($batch){
-        // Get all loans for this batch
-        $this->db->select('l.*, p.product_name, p.product_code, ic.Firstname, ic.Lastname, ic.ClientId, 
-                          g.group_name, g.group_code, e.Firstname as efname, e.Lastname as elname');
+        // Get all loans for this batch with group info
+        $this->db->select('l.*, p.product_name, p.product_code, ic.Firstname, ic.Lastname, ic.ClientId,
+                          g.group_name, g.group_code, e.Firstname as efname, e.Lastname as elname,
+                          grp.group_name as batch_group_name, grp.group_code as batch_group_code');
         $this->db->from('loan l');
         $this->db->join('loan_products p', 'l.loan_product = p.loan_product_id');
         $this->db->join('individual_customers ic', 'l.loan_customer = ic.id', 'left');
-        $this->db->join('groups g', 'l.loan_customer = g.group_id', 'left');
-        $this->db->join('employees e', 'l.loan_added_by = e.id');
+        $this->db->join('groups g', 'l.loan_customer = g.group_id AND l.customer_type = "group"', 'left');
+        $this->db->join('groups grp', 'l.group_id = grp.group_id', 'left');
+        $this->db->join('employees e', 'l.loan_added_by = e.id', 'left');
         $this->db->where('l.batch', $batch);
         $this->db->order_by('l.loan_id', 'ASC');
         $loans = $this->db->get()->result();
-        
+
         if(empty($loans)) {
             show_error('No loans found for batch: ' . $batch);
             return;
         }
-        
+
+        // Get batch group info from first loan
+        $batch_group_name = !empty($loans[0]->batch_group_name) ? $loans[0]->batch_group_name : 'N/A';
+        $batch_group_code = !empty($loans[0]->batch_group_code) ? $loans[0]->batch_group_code : 'N/A';
+
         $batch_data = array();
-        
+        $payment_schedules = array();
+
         foreach($loans as $loan) {
+            // Get payment schedules
             $payments = $this->Payement_schedules_model->get_all_by_id($loan->loan_id);
+            $payment_schedules[$loan->loan_id] = $payments;
+
             $maturity_date = $this->Payement_schedules_model->get_last_payment($loan->loan_id);
             $first_payment = $this->Payement_schedules_model->get_first_payment($loan->loan_id);
-            
+
             if($loan->customer_type=='group'){
                 $group = $this->Groups_model->get_by_id($loan->loan_customer);
                 $customer_name = $group->group_name.'('.$group->group_code.')';
@@ -2638,16 +2704,16 @@ class Loan extends CI_Controller
                 $indi = $this->Individual_customers_model->get_by_id($loan->loan_customer);
                 $customer_name = $indi->Firstname.' '.$indi->Lastname;
             }
-            
+
             $branchname=get_by_id('branches','Code',$loan->branch);
             $bname = $branchname ? $branchname->BranchName : 'N/A';
-            
-            $loan_data = array(
+
+            $loan_obj = (object) array(
                 'loan_id' => $loan->loan_id,
-                'maturity_date' => $maturity_date->payment_schedule,
-                'maturity_pay' => $maturity_date->amount,
-                'first_payment' => $first_payment->amount,
-                'first_payment_date' => $first_payment->payment_schedule,
+                'maturity_date' => $maturity_date ? $maturity_date->payment_schedule : 'N/A',
+                'maturity_pay' => $maturity_date ? $maturity_date->amount : 0,
+                'first_payment' => $first_payment ? $first_payment->amount : 0,
+                'first_payment_date' => $first_payment ? $first_payment->payment_schedule : 'N/A',
                 'loan_number' => $loan->loan_number,
                 'loan_product' => $loan->product_name,
                 'branch_name' => $bname,
@@ -2658,6 +2724,9 @@ class Loan extends CI_Controller
                 'loan_period' => $loan->loan_period,
                 'period_type' => $loan->period_type,
                 'loan_interest' => $loan->loan_interest,
+                'loan_interest_amount' => $loan->loan_interest_amount,
+                'admin_fee' => $loan->admin_fee,
+                'loan_cover' => $loan->loan_cover,
                 'loan_amount_total' => $loan->loan_amount_total,
                 'loan_amount_term' => $loan->loan_amount_term,
                 'next_payment_id' => $loan->next_payment_id,
@@ -2665,24 +2734,29 @@ class Loan extends CI_Controller
                 'loan_approved_by' => $loan->loan_approved_by,
                 'loan_status' => $loan->loan_status,
                 'loan_added_date' => $loan->loan_added_date,
-                'officer' => $loan->efname." ".$loan->elname,
-                'payments'=>$payments,
-                'product_name'=>$loan->product_name,
-                'collaterals' => get_all_by_id('collateral','loan_id', $loan->loan_id)
+                'officer_name' => $loan->efname." ".$loan->elname,
+                'Firstname' => $loan->Firstname,
+                'Lastname' => $loan->Lastname,
+                'ClientId' => $loan->ClientId,
+                'product_name' => $loan->product_name,
+                'customer_type' => $loan->customer_type
             );
-            
-            $batch_data[] = $loan_data;
+
+            $batch_data[] = $loan_obj;
         }
-        
+
         $data = array(
             'batch' => $batch,
+            'batch_number' => $batch,
             'loans' => $batch_data,
-            'group_name' => !empty($loans) && $loans[0]->customer_type == 'group' ? $loans[0]->group_name : 'Mixed Group',
+            'payment_schedules' => $payment_schedules,
+            'group_name' => $batch_group_name,
+            'group_code' => $batch_group_code,
             'total_loans' => count($loans),
-            'total_amount' => array_sum(array_column($loans, 'loan_principal')),
+            'total_amount' => array_sum(array_column($batch_data, 'loan_principal')),
             'branch_name' => !empty($loans) && !empty($loans[0]->branch) ? (get_by_id('branches','Code',$loans[0]->branch) ? get_by_id('branches','Code',$loans[0]->branch)->BranchName : 'N/A') : 'N/A'
         );
-        
+
         $this->load->library('Pdf');
         $html = $this->load->view('loan/batch_report', $data, true);
         $this->pdf->createPDF($html, "Batch ".$batch." loan report as on ".date('Y-m-d'), true);

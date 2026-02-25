@@ -13,7 +13,7 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
         </div>
     </div>
     <div class="card">
-        <div class="card-body" style="border: thick #24C16B solid;border-radius: 14px;">
+        <div class="card-body" style="border: thick #2a389d solid;border-radius: 14px;">
             <div class="row">
                 <div class="col-lg-3 border-right">
                     <h2>Loan Info</h2>
@@ -238,6 +238,26 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
                      <hr>
                     <?php
                 }
+                // Only show the latest non-reversed deposit for reversal
+                $this->db->where('account_number', $loan_number);
+                $this->db->where('credit >', 0);
+                $this->db->where("(reversed IS NULL OR reversed != 'Yes')");
+                $this->db->where("transaction_type != 'other'");
+                $this->db->order_by('system_time', 'DESC');
+                $this->db->limit(1);
+                $latest_deposit = $this->db->get('transaction')->row();
+                if(!empty($latest_deposit)){
+                ?>
+                <h5 style="color:#153505;margin-top:10px;">Latest Deposit</h5>
+                    <div style="border:1px solid #ddd;border-radius:6px;padding:8px;margin-bottom:6px;font-size:12px;">
+                        <div><strong>Ref:</strong> <?php echo $latest_deposit->transaction_id; ?></div>
+                        <div><strong>Amount:</strong> MWK<?php echo number_format($latest_deposit->credit,2); ?></div>
+                        <div><strong>Date:</strong> <?php echo $latest_deposit->system_time; ?></div>
+                        <a href="<?php echo base_url('Loan/transaction_reversal?tid='.$latest_deposit->transaction_id.'&account='.$loan_number)?>" class="btn btn-xs btn-danger" style="margin-top:4px;" onclick="return confirm('Are you sure you want to reverse this deposit of MWK<?php echo number_format($latest_deposit->credit,2); ?>? This is not recoverable.')"><i class="fa fa-undo"></i> Reverse</a>
+                    </div>
+                <hr>
+                <?php
+                }
                 if(empty($next_payment_details)){
                     echo "No more payments to make";
                 }else{
@@ -252,7 +272,7 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
 //
 //}else{
                         ?>
-                   
+
 
                         <a href="#" onclick="finish_payment()" class="btn btn-small btn-danger">Pay off payment</a>|
 

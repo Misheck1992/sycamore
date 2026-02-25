@@ -119,7 +119,7 @@
 			<td><?php echo $n ?></td>
 			<td><?php echo $loan->loan_number ?></td>
 			<td><?php echo $loan->product_name.'('.$loan->product_code.')' ?></td>
-                    <td><a href="<?php echo base_url($preview_url).$loan->loan_customer?>""><?php echo $customer_name?></a></td>
+                    <td><a href="<?php echo base_url($preview_url).$loan->loan_customer?>"><?php echo $customer_name?></a></td>
 <!--			<td><a href="--><?php //echo base_url('individual_customers/view/').$loan->id?><!--"">--><?php //echo $loan->Firstname." ".$loan->Lastname?><!--</a></td>-->
 			<td><?php echo $loan->loan_date ?></td>
 			<td><?php echo number_format($loan->loan_principal,2) ?></td>

@@ -15,6 +15,105 @@ class Payement_schedules_model extends CI_Model
         parent::__construct();
     }
 
+    /**
+     * Pay loan with late charges allocation priority
+     * Payment sequence: Late charges -> Loan cover -> Admin fees -> Interest -> Principal
+     */
+    public function pay_loan_with_late_charges($loan_number, $pay_number, $amount, $date, $tid) {
+        // Get payment schedule details
+        $this->db->select("*")->from($this->table);
+        $this->db->where('loan_id', $loan_number);
+        $this->db->where('payment_number', $pay_number);
+        $schedule = $this->db->get()->row();
+
+        if (!$schedule) {
+            return false;
+        }
+
+        $remaining_amount = $amount;
+        $allocation_log = [];
+
+        // 1. Pay Late Charges first
+        $late_charges = $schedule->total_late_charge ?? 0;
+        if ($late_charges > 0 && $remaining_amount > 0) {
+            $late_charge_payment = min($remaining_amount, $late_charges);
+            $remaining_amount -= $late_charge_payment;
+
+            // Update late charges
+            $new_late_charges = $late_charges - $late_charge_payment;
+            $this->db->where('loan_id', $loan_number);
+            $this->db->where('payment_number', $pay_number);
+            $this->db->update($this->table, ['total_late_charge' => $new_late_charges]);
+
+            $allocation_log[] = "Late Charges: MWK " . number_format($late_charge_payment, 2);
+        }
+
+        // Calculate remaining dues for each component
+        $total_schedule_amount = ($schedule->amount ?? 0);
+        $already_paid = ($schedule->paid_amount ?? 0);
+        $schedule_balance = $total_schedule_amount - $already_paid;
+
+        // If there's still remaining amount after late charges, allocate to schedule components
+        if ($remaining_amount > 0 && $schedule_balance > 0) {
+            $schedule_payment = min($remaining_amount, $schedule_balance);
+            $remaining_amount -= $schedule_payment;
+
+            // Update paid amount
+            $new_paid_amount = $already_paid + $schedule_payment;
+
+            $update_data = [
+                'paid_amount' => $new_paid_amount,
+                'paid_date' => $date
+            ];
+
+            // Check if fully paid (including late charges)
+            if ($new_paid_amount >= $total_schedule_amount && ($schedule->total_late_charge ?? 0) == 0) {
+                $update_data['status'] = 'PAID';
+                $update_data['partial_paid'] = 'NO';
+
+                // Update next payment ID
+                $this->db->where('loan_id', $loan_number)
+                         ->update('loan', ['next_payment_id' => $pay_number + 1]);
+
+                // Check if loan is fully paid
+                $count_schedules = $this->count_payments($loan_number);
+                if (intval($count_schedules) == intval($pay_number)) {
+                    $this->db->where('loan_id', $loan_number)
+                             ->update('loan', ['loan_status' => 'CLOSED']);
+                }
+            } else {
+                $update_data['partial_paid'] = 'YES';
+            }
+
+            $this->db->where('loan_id', $loan_number);
+            $this->db->where('payment_number', $pay_number);
+            $this->db->update($this->table, $update_data);
+
+            $allocation_log[] = "Schedule Payment: MWK " . number_format($schedule_payment, 2);
+        }
+
+        // Record transaction
+        $total_payment = $amount - $remaining_amount;
+        $transaction = array(
+            'ref' => $tid,
+            'loan_id' => $loan_number,
+            'amount' => $total_payment,
+            'payment_number' => $pay_number,
+            'transaction_type' => 3,
+            'payment_proof' => 'null',
+            'added_by' => $this->session->userdata('user_id'),
+            'date_stamp' => $date
+        );
+        $this->db->insert('transactions', $transaction);
+
+        return [
+            'success' => true,
+            'amount_allocated' => $total_payment,
+            'remaining_amount' => $remaining_amount,
+            'allocation_log' => $allocation_log
+        ];
+    }
+
     // get all
     function get_all()
     {
@@ -1235,11 +1334,14 @@ function  payment_today(){
 	$curr_date = $date->format('Y-m-d');
 
 
-	$this->db->select("*,employees.Firstname as efname,individual_customers.Firstname as ifname,individual_customers.Lastname as ilname,employees.Lastname as elname,")->from($this->table)
+	$this->db->select("*,employees.Firstname as efname,individual_customers.Firstname as ifname,individual_customers.Lastname as ilname,employees.Lastname as elname,
+		COALESCE(CONCAT(member_groups.group_name, ' (', member_groups.group_code, ')'), 'N/A') as customer_group_name")->from($this->table)
 		->join('loan','loan.loan_id = payement_schedules.loan_id')
 		->join('loan_products', 'loan_products.loan_product_id = loan.loan_product', 'LEFT')
 		->join('individual_customers','individual_customers.id = payement_schedules.customer','LEFT')
 		->join('employees','employees.id = loan.loan_added_by','LEFT')
+		->join('customer_groups', 'customer_groups.customer = loan.loan_customer AND loan.customer_type = "individual"', 'LEFT')
+		->join('groups member_groups', 'member_groups.group_id = customer_groups.group_id', 'LEFT')
 			->where('DATE(payment_schedule)',$curr_date)
 			->where('payement_schedules.status','NOT PAID')
 			->where('loan.loan_status','ACTIVE');
@@ -1253,14 +1355,17 @@ function  payment_month(){
 	$curr_date = $date->format('m');
 
 
-	$this->db->select("*,employees.Firstname as efname,individual_customers.Firstname as ifname,individual_customers.Lastname as ilname,employees.Lastname as elname,")->from($this->table)
+	$this->db->select("*,employees.Firstname as efname,individual_customers.Firstname as ifname,individual_customers.Lastname as ilname,employees.Lastname as elname,
+		COALESCE(CONCAT(member_groups.group_name, ' (', member_groups.group_code, ')'), 'N/A') as customer_group_name")->from($this->table)
 		->join('loan','loan.loan_id = payement_schedules.loan_id','LEFT')
 		->join('loan_products', 'loan_products.loan_product_id = loan.loan_product', 'LEFT')
 		->join('individual_customers','individual_customers.id = payement_schedules.customer','LEFT')
 		->join('employees','employees.id = loan.loan_added_by','LEFT')
+        ->join('branches','branches.id = loan.branch','LEFT')
+		->join('customer_groups', 'customer_groups.customer = loan.loan_customer AND loan.customer_type = "individual"', 'LEFT')
+		->join('groups member_groups', 'member_groups.group_id = customer_groups.group_id', 'LEFT')
 			->where('MONTH(payment_schedule)',$curr_date)
 			->where('payement_schedules.status','NOT PAID')
-        ->join('branches','branches.id = loan.branch','LEFT')
 			->where('loan.loan_status','ACTIVE');
 
     return	$this->db->get()->result();
@@ -1269,12 +1374,15 @@ function  payment_date($from,$to,$user,$product, $branch){
 	date_default_timezone_set("Africa/Blantyre");
 	$date = new DateTime("now");
 	$curr_date = $date->format('m');
-	$this->db->select("*,employees.Firstname as efname,individual_customers.Firstname as ifname,individual_customers.Lastname as ilname,employees.Lastname as elname,")->from($this->table)
+	$this->db->select("*,employees.Firstname as efname,individual_customers.Firstname as ifname,individual_customers.Lastname as ilname,employees.Lastname as elname,
+		COALESCE(CONCAT(member_groups.group_name, ' (', member_groups.group_code, ')'), 'N/A') as customer_group_name")->from($this->table)
 		->join('loan','loan.loan_id = payement_schedules.loan_id','LEFT')
 		->join('loan_products', 'loan_products.loan_product_id = loan.loan_product', 'LEFT')
 		->join('individual_customers','individual_customers.id = payement_schedules.customer','LEFT')
 		->join('employees','employees.id = loan.loan_added_by','LEFT')
 		->join('branches','branches.id = loan.branch','LEFT')
+		->join('customer_groups', 'customer_groups.customer = loan.loan_customer AND loan.customer_type = "individual"', 'LEFT')
+		->join('groups member_groups', 'member_groups.group_id = customer_groups.group_id', 'LEFT')
 		->where('payement_schedules.status','NOT PAID')
 			->where('loan.loan_status','ACTIVE');
 	if($from !="" && $to !=""){
@@ -1299,15 +1407,18 @@ function  payment_week(){
 	$week_end = date('Y-m-d', $date_end);
 
 
-	$this->db->select("*,employees.Firstname as efname,individual_customers.Firstname as ifname,individual_customers.Lastname as ilname,employees.Lastname as elname,")->from($this->table)
+	$this->db->select("*,employees.Firstname as efname,individual_customers.Firstname as ifname,individual_customers.Lastname as ilname,employees.Lastname as elname,
+		COALESCE(CONCAT(member_groups.group_name, ' (', member_groups.group_code, ')'), 'N/A') as customer_group_name")->from($this->table)
 		->join('loan','loan.loan_id = payement_schedules.loan_id')
 		->join('loan_products', 'loan_products.loan_product_id = loan.loan_product', 'LEFT')
 		->join('individual_customers','individual_customers.id = payement_schedules.customer','LEFT')
-		->join('employees','employees.id = loan.loan_added_by','LEFT');
+		->join('employees','employees.id = loan.loan_added_by','LEFT')
+        ->join('branches','branches.id = loan.branch','LEFT')
+		->join('customer_groups', 'customer_groups.customer = loan.loan_customer AND loan.customer_type = "individual"', 'LEFT')
+		->join('groups member_groups', 'member_groups.group_id = customer_groups.group_id', 'LEFT');
 			$this->db->where('payment_schedule >=', $week_start);
 			$this->db->where('payment_schedule <=', $week_end);
 			$this->db->where('payement_schedules.status','NOT PAID')
-                ->join('branches','branches.id = loan.branch','LEFT')
 				->where('loan.loan_status','ACTIVE');
 
     return	$this->db->get()->result();

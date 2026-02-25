@@ -522,3 +522,14 @@ $config['rewrite_short_tags'] = FALSE;
 | Array:		array('10.0.1.200', '192.168.5.0/24')
 */
 $config['proxy_ips'] = '';
+
+/*
+|--------------------------------------------------------------------------
+| Cron Secret Token
+|--------------------------------------------------------------------------
+|
+| Secret token for authenticating cron job requests without user login
+| Change this to a random secure string in production
+|
+*/
+$config['cron_secret_token'] = 'change_this_to_random_secure_token_' . md5('newsycamore_cron');
