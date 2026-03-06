@@ -53,8 +53,8 @@
                     </div>
                     <div class="col-md-6">
                         <div class="form-group">
-                            <label for="officer_id">Branch:</label>
-                            <select class="form-control" id="officer_id" name="branch_id">
+                            <label for="branch_id">Branch:</label>
+                            <select class="form-control" id="branch_id" name="branch_id">
                                 <option value="">All Branches</option>
                                 <?php
                                 $branches = get_all('branches');

@@ -28,6 +28,20 @@ class Customer_groups_model extends CI_Model
 			->where('group_id',$id);
         return $this->db->get()->result();
     }
+
+    /**
+     * Get groups that an individual customer belongs to
+     * @param int $customer_id individual_customers.id
+     * @return array of group objects with group_name, group_code
+     */
+    function get_groups_by_customer($customer_id)
+    {
+        $this->db->select('groups.group_id, groups.group_name, groups.group_code, customer_groups.date_joined');
+        $this->db->from($this->table);
+        $this->db->join('groups', 'groups.group_id = customer_groups.group_id');
+        $this->db->where('customer_groups.customer', $customer_id);
+        return $this->db->get()->result();
+    }
     function check($id,$customer)
     {
 

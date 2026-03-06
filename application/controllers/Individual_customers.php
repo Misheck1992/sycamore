@@ -11,6 +11,7 @@ class Individual_customers extends CI_Controller
         $this->load->model('Individual_customers_model');
         $this->load->model('Corporate_customers_model');
 		$this->load->model('Branches_model');
+		$this->load->model('Customer_groups_model');
 		$this->load->model('Loan_model');
 		$this->load->model('Account_model');
 		$this->load->model('Geo_countries_model');
@@ -299,6 +300,7 @@ function send_s(){
 		'Branch' => $row->Branch,
 		'LastUpdatedOn' => $row->LastUpdatedOn,
 		'CreatedOn' => $row->CreatedOn,
+		'customer_groups' => $this->Customer_groups_model->get_groups_by_customer($id),
 	    );
 			$menu_toggle['toggles'] = 43;
 			$this->load->view('admin/header',$menu_toggle);
@@ -338,6 +340,7 @@ function send_s(){
 		'Branch' => $row->Branch,
 		'LastUpdatedOn' => $row->LastUpdatedOn,
 		'CreatedOn' => $row->CreatedOn,
+		'customer_groups' => $this->Customer_groups_model->get_groups_by_customer($id),
 	    );
 			$menu_toggle['toggles'] = 43;
 			$this->load->view('admin/header', $menu_toggle);

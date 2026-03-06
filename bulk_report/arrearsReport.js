@@ -51,9 +51,9 @@ async function generateArrearsReport(filterOptions, reportId, reportTrackers, db
 
             let queryParams = [];
 
-            // Add filters
+            // Add filters - use disbursed_date when available (actual disbursement) else loan_date
             if (filterOptions.start_date && filterOptions.end_date) {
-                query += ` AND l.loan_date BETWEEN ? AND ?`;
+                query += ` AND COALESCE(DATE(l.disbursed_date), l.loan_date) BETWEEN ? AND ?`;
                 queryParams.push(filterOptions.start_date, filterOptions.end_date);
             }
 
@@ -229,7 +229,7 @@ async function generateArrearsHTML(loans, filterOptions, reportId, reportTracker
                 const progressPercent = 20 + (processedCount / totalLoans) * 70;
                 reportTrackers[reportId].percentage = Math.round(progressPercent);
 
-                // Get customer name and group
+                // Get customer name and group (both names for all reports per Issue 12)
                 let customerName = '';
                 let customerGroupName = 'N/A';
                 if (loan.customer_type === 'individual') {
@@ -239,6 +239,12 @@ async function generateArrearsHTML(loans, filterOptions, reportId, reportTracker
                         customerName = `${customerResult[0].Firstname} ${customerResult[0].Lastname}`;
                     } else {
                         customerName = 'Unknown Customer';
+                    }
+                    // Get group membership for individual customers
+                    const groupQuery = 'SELECT g.group_name, g.group_code FROM customer_groups cg JOIN `groups` g ON g.group_id = cg.group_id WHERE cg.customer = ?';
+                    const groupResult = await queryDatabase(db, groupQuery, [loan.loan_customer]);
+                    if (groupResult.length > 0) {
+                        customerGroupName = `${groupResult[0].group_name} (${groupResult[0].group_code})`;
                     }
                 } else if (loan.customer_type === 'group') {
                     const groupQuery = 'SELECT group_name, group_code FROM `groups` WHERE group_id = ?';

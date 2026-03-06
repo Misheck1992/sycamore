@@ -68,14 +68,13 @@ $get_c = get_all('individual_customers');
 					<div class="form-group col-12">
 						<label for="varchar">Select/search group members (You can select multiple members)</label>
 						<?php
-						$dd = get_all_by_id('customer_groups','group_id', $group_id);
-						$row=array();
-						foreach($dd as $single)
-						{
-							//You can store it as an array here if you are going on with multiple loops
-							$row[] = $single->customer;
+						$row = array();
+						if (!empty($group_id)) {
+							$dd = get_all_by_id('customer_groups','group_id', $group_id);
+							foreach($dd as $single) {
+								$row[] = $single->customer;
+							}
 						}
-
 						?>
 						<select name="customer[]" id="" class="form-control select2"  multiple required>
 							<option value="">--select customer--</option>

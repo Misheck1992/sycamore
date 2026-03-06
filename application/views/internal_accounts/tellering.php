@@ -106,7 +106,7 @@ $vault = get_by_id('account','is_vault',"Yes")
 							<?php
 							foreach ($all_user as $u){
 								?>
-								<option value="<?php echo $u->id ?>"><?php echo $u->Firstname." ".$u->Lastname ?></option>
+								<option value="<?php echo $u->Employee ?>"><?php echo $u->Firstname." ".$u->Lastname ?></option>
 							<?php
 							}
 							?>

@@ -15,6 +15,20 @@ class Loan_model extends CI_Model
 	{
 		parent::__construct();
 	}
+
+	/**
+	 * Ensure schedule date is unique for this loan (prevents duplicate months - Issue 2)
+	 */
+	private function _ensure_schedule_date_unique($loan_id, $date) {
+		$exists = $this->db->where('loan_id', $loan_id)->where('payment_schedule', $date)->count_all_results('payement_schedules');
+		while ($exists > 0) {
+			$date = date('Y-m-d', strtotime('+1 day', strtotime($date)));
+			if (date('N', strtotime($date)) == 7) $date = date('Y-m-d', strtotime('+1 day', strtotime($date)));
+			$exists = $this->db->where('loan_id', $loan_id)->where('payment_schedule', $date)->count_all_results('payement_schedules');
+		}
+		return $date;
+	}
+
     public  function delete_replace_loans()
     {
         $jsonData = '[
@@ -4675,6 +4689,12 @@ function add_amortization_biweekly($principal, $loan_amount, $product_id, $loan_
 			$frequency = $days * $payment_counter;
 			$newdate = strtotime('+' . $frequency . ' day', strtotime($date));
 			$newdate = date('Y-m-d', $newdate);
+			// Roll Sunday to Monday (7 = Sunday in date('N'))
+			if (date('N', strtotime($newdate)) == 7) {
+				$newdate = date('Y-m-d', strtotime('+1 day', strtotime($newdate)));
+			}
+			// Prevent duplicate schedule dates (Issue 2)
+			$newdate = $this->_ensure_schedule_date_unique($id, $newdate);
 
 			// Insert payment schedule
 			$this->db->insert(
@@ -4865,13 +4885,22 @@ function add_amortization_biweekly($principal, $loan_amount, $product_id, $loan_
 			$towards_balance = $monthly_payment_actual - ($towards_interest + $towards_fees1 + $towards_lc1);
 			$current_balance = $current_balance - $towards_balance;
 
+			// Roll Sunday to Monday (7 = Sunday in date('N'))
+			$schedule_date = $date;
+			if (date('N', strtotime($date)) == 7) {
+				$schedule_date = date('Y-m-d', strtotime('+1 day', strtotime($date)));
+			} else {
+				$schedule_date = date('Y-m-d', strtotime($date));
+			}
+			$schedule_date = $this->_ensure_schedule_date_unique($id, $schedule_date);
+
 			// Insert payment schedule
 			$this->db->insert(
 				'payement_schedules', array(
 					'customer' => $loan_customer,
 					'customer_type' => $customer_type,
 					'loan_id' => $id,
-					'payment_schedule' => $date,
+					'payment_schedule' => $schedule_date,
 					'payment_number' => $payment_counter,
 					'amount' => $monthly_payment_actual,
 					'principal' => $towards_balance,
@@ -7336,10 +7365,10 @@ $this->db->where('payment_number',$i);
 	}
 	
 	// get all
-	function get_all($status)
+	function get_all($status, $batch = null)
 	{
         $this->db->order_by('loan.loan_added_date', 'DESC');
-        $this->db->select("*,employees.Firstname as efname, loan.branch AS loan_branch, employees.Lastname as elname, loan.loan_customer as cid, 
+        $this->db->select("*,employees.Firstname as efname, loan.branch AS loan_branch, employees.Lastname as elname, loan.loan_customer as cid,
                           COALESCE(funds_source.source_name, 'N/A') as funds_source_name,
                           COALESCE(CONCAT(groups.group_name, ' (', groups.group_code, ')'), 'N/A') as customer_group_name,
                           COALESCE(loan.batch, 'N/A') as batch_number")
@@ -7351,8 +7380,11 @@ $this->db->where('payment_number',$i);
             ->join('groups','groups.group_id = customer_groups.group_id', 'left');
         $this->db->where("loan_status !=", "DELETED");
 
-		if($status !=""){
+		if(!empty($status)){
 			$this->db->where('loan_status',$status);
+		}
+		if (!empty($batch)) {
+			$this->db->where('loan.batch', $batch);
 		}
 
 		return $this->db->get()->result();

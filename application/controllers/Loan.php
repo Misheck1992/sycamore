@@ -708,15 +708,16 @@ class Loan extends CI_Controller
                     // Process pay off loan (activates the loan and creates payment schedule)
                     $this->pay_off_loan($loan->loan_id);
                     
-                    // Update loan status to ACTIVE
+                    $disbursed_date = date('Y-m-d H:i:s');
                     $update_data = array(
                         'loan_status' => 'ACTIVE',
                         'disbursed' => 'Yes',
                         'disbursed_by' => $this->session->userdata('user_id'),
-                        'disbursed_date' => date('Y-m-d H:i:s')
+                        'disbursed_date' => $disbursed_date
                     );
-                    
                     $this->Loan_model->update($loan->loan_id, $update_data);
+                    // Shift schedule dates to start from disbursed_date (Issue 6)
+                    $this->Payement_schedules_model->shift_schedules_to_disbursed_date($loan->loan_id, $loan->loan_date, $disbursed_date);
                     
                     // Check if the update was successful by verifying the database
                     $this->db->where('loan_id', $loan->loan_id);
@@ -1276,13 +1277,24 @@ class Loan extends CI_Controller
                         ->where('customer_type', 'individual')
                         ->where('loan_status', 'ACTIVE')
                         ->get()->row();
-                    
+
                     if (!empty($has_loan)) {
-                        // Skip this member if they already have an active loan
                         $failed_loans++;
                         continue;
                     }
-                    
+
+                    // Prevent duplicate: skip if loan already exists for this member+group+batch
+                    $dup = $this->db->select("*")->from('loan')
+                        ->where('loan_customer', $member_id)
+                        ->where('group_id', $group_id)
+                        ->where('batch', $batch_number)
+                        ->where('loan_status !=', 'DELETED')
+                        ->get()->row();
+                    if (!empty($dup)) {
+                        $failed_loans++;
+                        continue;
+                    }
+
                     // Create individual loan for this member
                     $result = $this->Loan_model->add_loan(
                         $amount,                    // loan amount (individual per member)
@@ -1418,6 +1430,9 @@ class Loan extends CI_Controller
         $trans_id = $this->input->get('tid');
         $loan_number =  $this->input->get('account');
         $get_account = $this->Tellering_model->get_teller_account($this->session->userdata('user_id'));
+        if (empty($get_account) && $this->session->userdata('RoleName') === 'SUPER ADMIN') {
+            $get_account = $this->Tellering_model->get_teller_account1();
+        }
         $tid = "TR-S" . rand(100, 9999) . date('Y') . date('m') . date('d');
         $date = date("Y-m-d");
         if(empty($get_account)){
@@ -1440,21 +1455,23 @@ class Loan extends CI_Controller
                     $schedules_reversed = 0;
                     $affected_loan_id = null;
                     foreach ($reverse_loans_repayments as $to_act){
-
                         $get_schedules = $this->db->where('loan_id',$to_act->loan_id)->where('payment_number',$to_act->payment_number)
                             ->get('payement_schedules')->row();
+                        if (!$get_schedules) continue;
                         $to_remove_amount = $get_schedules->paid_amount;
-//                        caculate
-                        $to_update_amount = $to_remove_amount-$to_act->amount;
-                        if($to_update_amount <=0){
-                            $this->db->where('id',$get_schedules->id)->update('payement_schedules',array('paid_amount'=>$to_update_amount,"status"=>"NOT PAID","partial_paid"=>"NO"));
+                        $to_update_amount = max(0, $to_remove_amount - $to_act->amount);
+                        if($to_update_amount <= 0){
+                            $this->db->where('id',$get_schedules->id)->update('payement_schedules',array('paid_amount'=>0,"status"=>"NOT PAID","partial_paid"=>"NO"));
                             $schedules_reversed++;
                         }else{
                             $this->db->where('id',$get_schedules->id)->update('payement_schedules',array('paid_amount'=>$to_update_amount));
-
                         }
                         $this->db->where('loan_id',$to_act->loan_id)->update('loan',array('loan_status'=>"ACTIVE"));
                         $affected_loan_id = $to_act->loan_id;
+                    }
+                    // Recalculate loan_balance for affected loan schedules to fix amortization display
+                    if ($affected_loan_id) {
+                        $this->Payement_schedules_model->recalculate_loan_balances($affected_loan_id);
                     }
 
                     // Adjust next_payment_id by subtracting the number of fully reversed schedules
@@ -1502,7 +1519,9 @@ class Loan extends CI_Controller
         $this->load->view('admin/footer');
     }
     function restructure(){
-        $data['loan_data'] = $this->Loan_model->get_all('');
+        $batch = $this->input->get('batch');
+        $data['loan_data'] = $this->Loan_model->get_all('', $batch);
+        $data['batch_filter'] = $batch;
         $menu_toggle['toggles'] = 23;
         $this->load->view('admin/header', $menu_toggle);
         $this->load->view('loan/restructure', $data);
@@ -1709,6 +1728,9 @@ class Loan extends CI_Controller
         $loan_account = get_by_id('loan', 'loan_id', $loan_number);
         $tid = "TR-S" . rand(100, 9999) . date('Y') . date('m') . date('d');
         $get_account = $this->Tellering_model->get_teller_account($this->session->userdata('user_id'));
+        if (empty($get_account) && $this->session->userdata('RoleName') === 'SUPER ADMIN') {
+            $get_account = $this->Tellering_model->get_teller_account1();
+        }
         if(empty($get_account)){
             $this->toaster->error('You are not authorized to do this transaction');
             redirect($_SERVER['HTTP_REFERER']);
@@ -1827,6 +1849,10 @@ class Loan extends CI_Controller
         $collection_acccount = get_by_id('account','collection_account','Yes');
 
         $get_account = $this->Tellering_model->get_teller_account($this->session->userdata('user_id'));
+        // SUPER ADMIN bypass: use internal teller account if no teller assigned
+        if (empty($get_account) && $this->session->userdata('RoleName') === 'SUPER ADMIN') {
+            $get_account = $this->Tellering_model->get_teller_account1();
+        }
         $tid = "TR-S" . rand(100, 9999) . date('Y') . date('m') . date('d');
         $mode = 'deposit';
         if(!empty($get_account)){
@@ -2829,13 +2855,15 @@ class Loan extends CI_Controller
         $action = "ACTIVE";
 //print_r($exist);
 //print_r($has_loan);
+        $disbursed_dt = date('Y-m-d H:i:s');
         if(empty($has_loan)){
-            $this->Loan_model->update($loan_id,array('loan_status'=>$action,'disbursed'=>'Yes',$by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s')));
-
+            $this->Loan_model->update($loan_id,array('loan_status'=>$action,'disbursed'=>'Yes',$by=>$this->session->userdata('user_id'),$by_date =>$disbursed_dt));
+            $this->Payement_schedules_model->shift_schedules_to_disbursed_date($loan_id, $exist->loan_date, $disbursed_dt);
         }
         else {
 
-            $this->Loan_model->update($loan_id,array('loan_status'=>$action,'disbursed'=>'Yes',$by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s')));
+            $this->Loan_model->update($loan_id,array('loan_status'=>$action,'disbursed'=>'Yes',$by=>$this->session->userdata('user_id'),$by_date =>$disbursed_dt));
+            $this->Payement_schedules_model->shift_schedules_to_disbursed_date($loan_id, $exist->loan_date, $disbursed_dt);
 
 //    $halfSchedules = $has_loan->loan_period / 2;
             $total_payoff = 0;

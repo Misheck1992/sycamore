@@ -34,6 +34,17 @@
 	    <tr><td>SourceOfIncome</td><td><?php echo $SourceOfIncome; ?></td></tr>
 	    <tr><td>GrossMonthlyIncome</td><td><?php echo $GrossMonthlyIncome; ?></td></tr>
 	    <tr><td>Branch</td><td><?php echo $Branch; ?></td></tr>
+	    <tr><td>Group Membership</td><td>
+		    <?php if (!empty($customer_groups)): ?>
+			    <?php foreach ($customer_groups as $cg): ?>
+				    <span class="badge badge-info"><?php echo htmlspecialchars($cg->group_name); ?> (<?php echo htmlspecialchars($cg->group_code); ?>)</span>
+				    <?php if ($cg->date_joined): ?> - Joined <?php echo $cg->date_joined; ?><?php endif; ?>
+				    <br>
+			    <?php endforeach; ?>
+		    <?php else: ?>
+			    <em>None</em>
+		    <?php endif; ?>
+	    </td></tr>
 	    <tr><td>LastUpdatedOn</td><td><?php echo $LastUpdatedOn; ?></td></tr>
 	    <tr><td>CreatedOn</td><td><?php echo $CreatedOn; ?></td></tr>
 

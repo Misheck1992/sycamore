@@ -54,6 +54,9 @@
                     <a href="<?php echo base_url('loan/batch_report/').$batch; ?>" class="btn btn-success" target="_blank">
                         <i class="fas fa-file-pdf mr-2"></i>Print Batch Report
                     </a>
+                    <a href="<?php echo base_url('loan/restructure?batch=').urlencode($batch); ?>" class="btn btn-info">
+                        <i class="fas fa-edit mr-2"></i>Restructure Loans
+                    </a>
                 </div>
             </div>
         </div>

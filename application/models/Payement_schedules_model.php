@@ -75,9 +75,7 @@ class Payement_schedules_model extends CI_Model
                 $this->db->where('loan_id', $loan_number)
                          ->update('loan', ['next_payment_id' => $pay_number + 1]);
 
-                // Check if loan is fully paid
-                $count_schedules = $this->count_payments($loan_number);
-                if (intval($count_schedules) == intval($pay_number)) {
+                if ($this->_should_close_loan($loan_number, $pay_number)) {
                     $this->db->where('loan_id', $loan_number)
                              ->update('loan', ['loan_status' => 'CLOSED']);
                 }
@@ -219,10 +217,8 @@ class Payement_schedules_model extends CI_Model
                     $this->db->where('payment_number', $lr->payment_number);
                     $this->db->update($this->table,$data);
                     $this->db->where('loan_id',$loan_number)->update('loan',array('next_payment_id'=>$lr->payment_number+1));
-                    $count_schedules = $this->count_payments($loan_number);
-                    if(intval($count_schedules) == intval($lr->payment_number)){
-                        $this->db->where('loan_id', $loan_number)->
-                        update('loan',array('loan_status'=>'CLOSED'));
+                    if($this->_should_close_loan($loan_number, $lr->payment_number)){
+                        $this->db->where('loan_id', $loan_number)->update('loan',array('loan_status'=>'CLOSED'));
                     }
                     $transaction = array(
                         'ref' => $tid,
@@ -250,10 +246,8 @@ class Payement_schedules_model extends CI_Model
                     $this->db->where('payment_number', $lr->payment_number);
                     $this->db->update($this->table,$data);
                     $this->db->where('loan_id',$loan_number)->update('loan',array('next_payment_id'=>$lr->payment_number+1));
-                    $count_schedules = $this->count_payments($loan_number);
-                    if(intval($count_schedules) == intval($lr->payment_number)){
-                        $this->db->where('loan_id', $loan_number)->
-                        update('loan',array('loan_status'=>'CLOSED'));
+                    if($this->_should_close_loan($loan_number, $lr->payment_number)){
+                        $this->db->where('loan_id', $loan_number)->update('loan',array('loan_status'=>'CLOSED'));
                     }
                     $transaction = array(
                         'ref' => $tid,
@@ -289,10 +283,8 @@ class Payement_schedules_model extends CI_Model
             $this->db->where('payment_number', $pay_number);
             $this->db->update($this->table,$data);
             $this->db->where('loan_id',$loan_number)->update('loan',array('next_payment_id'=>$pay_number+1));
-            $count_schedules = $this->count_payments($loan_number);
-            if(intval($count_schedules) == intval($pay_number)){
-                $this->db->where('loan_id', $loan_number)->
-                update('loan',array('loan_status'=>'CLOSED'));
+            if($this->_should_close_loan($loan_number, $pay_number)){
+                $this->db->where('loan_id', $loan_number)->update('loan',array('loan_status'=>'CLOSED'));
             }
             $transaction = array(
                 'ref' => $tid,
@@ -404,10 +396,8 @@ class Payement_schedules_model extends CI_Model
                     $this->db->where('payment_number', $lr->payment_number);
                     $this->db->update($this->table,$data);
                     $this->db->where('loan_id',$loan_number)->update('loan',array('next_payment_id'=>$lr->payment_number+1));
-                    $count_schedules = $this->count_payments($loan_number);
-                    if(intval($count_schedules) == intval($lr->payment_number)){
-                        $this->db->where('loan_id', $loan_number)->
-                        update('loan',array('loan_status'=>'CLOSED'));
+                    if($this->_should_close_loan($loan_number, $lr->payment_number)){
+                        $this->db->where('loan_id', $loan_number)->update('loan',array('loan_status'=>'CLOSED'));
                     }
                     $transaction = array(
                         'ref' => $tid,
@@ -435,10 +425,8 @@ class Payement_schedules_model extends CI_Model
                     $this->db->where('payment_number', $lr->payment_number);
                     $this->db->update($this->table,$data);
                     $this->db->where('loan_id',$loan_number)->update('loan',array('next_payment_id'=>$lr->payment_number+1));
-                    $count_schedules = $this->count_payments($loan_number);
-                    if(intval($count_schedules) == intval($lr->payment_number)){
-                        $this->db->where('loan_id', $loan_number)->
-                        update('loan',array('loan_status'=>'CLOSED'));
+                    if($this->_should_close_loan($loan_number, $lr->payment_number)){
+                        $this->db->where('loan_id', $loan_number)->update('loan',array('loan_status'=>'CLOSED'));
                     }
                     $transaction = array(
                         'ref' => $tid,
@@ -474,10 +462,8 @@ class Payement_schedules_model extends CI_Model
             $this->db->where('payment_number', $pay_number);
             $this->db->update($this->table,$data);
             $this->db->where('loan_id',$loan_number)->update('loan',array('next_payment_id'=>$pay_number+1));
-            $count_schedules = $this->count_payments($loan_number);
-            if(intval($count_schedules) == intval($pay_number)){
-                $this->db->where('loan_id', $loan_number)->
-                update('loan',array('loan_status'=>'CLOSED'));
+            if($this->_should_close_loan($loan_number, $pay_number)){
+                $this->db->where('loan_id', $loan_number)->update('loan',array('loan_status'=>'CLOSED'));
             }
             $transaction = array(
                 'ref' => $tid,
@@ -601,10 +587,8 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
             $this->db->where('payment_number', $lr->payment_number);
             $this->db->update($this->table, $data);
             $this->db->where('loan_id', $loan_number)->update('loan', array('next_payment_id' => $pay_number));
-            $count_schedules = $this->count_payments($loan_number);
-            if (intval($count_schedules) == intval($lr->payment_number)) {
-                $this->db->where('loan_id', $loan_number)->
-                update('loan', array('loan_status' => 'CLOSED'));
+            if ($this->_should_close_loan($loan_number, $lr->payment_number)) {
+                $this->db->where('loan_id', $loan_number)->update('loan', array('loan_status' => 'CLOSED'));
             }
 
             $transaction = array(
@@ -716,10 +700,8 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
                     $this->db->where('payment_number', $lr->payment_number);
                     $this->db->update($this->table,$data);
                     $this->db->where('loan_id',$loan_number)->update('loan',array('next_payment_id'=>$lr->payment_number+1));
-                    $count_schedules = $this->count_payments($loan_number);
-                    if(intval($count_schedules) == intval($lr->payment_number)){
-                        $this->db->where('loan_id', $loan_number)->
-                        update('loan',array('loan_status'=>'CLOSED'));
+                    if($this->_should_close_loan($loan_number, $lr->payment_number)){
+                        $this->db->where('loan_id', $loan_number)->update('loan',array('loan_status'=>'CLOSED'));
                     }
                     $transaction = array(
                         'ref' => "GF.".date('Y').date('m').date('d').'.'.rand(100,999),
@@ -747,10 +729,8 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
                     $this->db->where('payment_number', $lr->payment_number);
                     $this->db->update($this->table,$data);
                     $this->db->where('loan_id',$loan_number)->update('loan',array('next_payment_id'=>$lr->payment_number+1));
-                    $count_schedules = $this->count_payments($loan_number);
-                    if(intval($count_schedules) == intval($lr->payment_number)){
-                        $this->db->where('loan_id', $loan_number)->
-                        update('loan',array('loan_status'=>'CLOSED'));
+                    if($this->_should_close_loan($loan_number, $lr->payment_number)){
+                        $this->db->where('loan_id', $loan_number)->update('loan',array('loan_status'=>'CLOSED'));
                     }
                     $transaction = array(
                         'ref' => "GF.".date('Y').date('m').date('d').'.'.rand(100,999),
@@ -786,10 +766,8 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
             $this->db->where('payment_number', $pay_number);
             $this->db->update($this->table,$data);
             $this->db->where('loan_id',$loan_number)->update('loan',array('next_payment_id'=>$pay_number+1));
-            $count_schedules = $this->count_payments($loan_number);
-            if(intval($count_schedules) == intval($pay_number)){
-                $this->db->where('loan_id', $loan_number)->
-                update('loan',array('loan_status'=>'CLOSED'));
+            if($this->_should_close_loan($loan_number, $pay_number)){
+                $this->db->where('loan_id', $loan_number)->update('loan',array('loan_status'=>'CLOSED'));
             }
             $transaction = array(
                 'ref' => "GF.".date('Y').date('m').date('d').'.'.rand(100,999),
@@ -957,10 +935,8 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
             $this->db->where('payment_number', $pay_number);
             $this->db->update($this->table,$data);
             $this->db->where('loan_id',$loan_number)->update('loan',array('next_payment_id'=>$pay_number+1));
-                $count_schedules = $this->count_payments($loan_number);
-                if(intval($count_schedules) == intval($pay_number)){
-                    $this->db->where('loan_id', $loan_number)->
-                    update('loan',array('loan_status'=>'CLOSED'));
+                if($this->_should_close_loan($loan_number, $pay_number)){
+                    $this->db->where('loan_id', $loan_number)->update('loan',array('loan_status'=>'CLOSED'));
                 }
             $transaction = array(
                 'ref' => "GF.".date('Y').date('m').date('d').'.'.rand(100,999),
@@ -997,8 +973,9 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
             $this->db->where('payment_number', $pay_number);
             $this->db->update($this->table,$data);
             $this->db->where('loan_id',$loan_number)->update('loan',array('next_payment_id'=>$pay_number+1));
-        $this->db->where('loan_id', $loan_number)->
-        update('loan',array('loan_status'=>'CLOSED'));
+            if($this->_should_close_loan($loan_number, $pay_number)){
+                $this->db->where('loan_id', $loan_number)->update('loan',array('loan_status'=>'CLOSED'));
+            }
             $transaction = array(
                 'ref' => "GF.".date('Y').date('m').date('d').'.'.rand(100,999),
                 'loan_id' => $loan_number,
@@ -1017,6 +994,48 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
         $this->db->select("*")->from($this->table);
         $this->db->where('loan_id', $loan_number);
         return $this->db->count_all_results();
+    }
+
+    /**
+     * Shift schedule dates to start from disbursed_date instead of loan_date
+     */
+    public function shift_schedules_to_disbursed_date($loan_id, $loan_date, $disbursed_date) {
+        $loan_dt = strtotime($loan_date);
+        $disb_dt = strtotime($disbursed_date);
+        $days_diff = ($disb_dt - $loan_dt) / 86400;
+        if (abs($days_diff) < 1) return;
+        $schedules = $this->db->where('loan_id', $loan_id)->get($this->table)->result();
+        foreach ($schedules as $s) {
+            $new_date = date('Y-m-d', strtotime("+{$days_diff} days", strtotime($s->payment_schedule)));
+            if (date('N', strtotime($new_date)) == 7) $new_date = date('Y-m-d', strtotime('+1 day', strtotime($new_date)));
+            $this->db->where('id', $s->id)->update($this->table, array('payment_schedule' => $new_date));
+        }
+    }
+
+    /**
+     * Recalculate loan_balance for all schedules after reversal/edit to fix amortization display
+     */
+    public function recalculate_loan_balances($loan_id) {
+        $loan = $this->db->where('loan_id', $loan_id)->get('loan')->row();
+        if (!$loan) return;
+        $schedules = $this->db->where('loan_id', $loan_id)->order_by('payment_number', 'ASC')->get($this->table)->result();
+        $running_balance = floatval($loan->loan_principal);
+        foreach ($schedules as $s) {
+            $principal = floatval($s->principal ?? 0);
+            $running_balance -= $principal;
+            $this->db->where('id', $s->id)->update($this->table, array('loan_balance' => max(0, $running_balance)));
+        }
+    }
+
+    /**
+     * Check if loan should be closed - prevents premature closure by verifying total paid >= total due
+     */
+    private function _should_close_loan($loan_number, $pay_number) {
+        $count_schedules = $this->count_payments($loan_number);
+        if (intval($count_schedules) != intval($pay_number)) return false;
+        $totals = $this->db->select('SUM(amount) as total_due, SUM(paid_amount) as total_paid')
+            ->from($this->table)->where('loan_id', $loan_number)->get()->row();
+        return $totals && (floatval($totals->total_paid) >= floatval($totals->total_due) - 0.01);
     }
     function pay($loan_number,$pay_number,$amount)
     {

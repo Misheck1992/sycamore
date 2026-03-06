@@ -80,7 +80,14 @@ class Tellering_model extends CI_Model
 	}
 	public function get_teller_account1(){
 		$this->db->from($this->table);
+		$this->db->join('account','account.account_number=tellering.account');
 		$this->db->where('tellering.is_internal', 'Yes');
+		$row = $this->db->get()->row();
+		if (!empty($row)) return $row;
+		// Fallback: use first available teller if no internal teller configured
+		$this->db->from($this->table);
+		$this->db->join('account','account.account_number=tellering.account');
+		$this->db->limit(1);
 		return $this->db->get()->row();
 	}
     // update data
