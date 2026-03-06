@@ -3908,7 +3908,7 @@ class Loan_model extends CI_Model
 
                 }
             }
-		$table = $table . "<tr style='color: white; background-color: #2a389d'>";
+		$table = $table . "<tr style='color: white; background-color: #0e9970'>";
 		$table = $table . "<td width='30'>-</td>";
 		$table = $table . "<td width='30'>-</td>";
 
@@ -4102,7 +4102,7 @@ class Loan_model extends CI_Model
 
 
 			}
-		$table = $table . "<tr style='color: white; background-color: #2a389d'>";
+		$table = $table . "<tr style='color: white; background-color: #0e9970'>";
 		$table = $table . "<td width='30'>-</td>";
 		$table = $table . "<td width='60'>-</td>";
 		$table = $table . "<td width='60'>-</td>";
@@ -7320,7 +7320,7 @@ $this->db->where('payment_number',$i);
 		}
 
 		// Return the amortization schedule
-		$table = $table . "<tr style='color: white; background-color: #2a389d'>";
+		$table = $table . "<tr style='color: white; background-color: #0e9970'>";
 		$table = $table . "<td width='30'>-</td>";
 		$table = $table . "<td width='30'>-</td>";
 

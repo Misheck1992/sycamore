@@ -10,7 +10,7 @@
 		</div>
 	</div>
 	<div class="card">
-		<div class="card-body" style="border: thick #2a389d solid;border-radius: 14px;">
+		<div class="card-body" style="border: thick #24C16B solid;border-radius: 14px;">
             <div style="overflow-y: auto"">
 			<table  id="data-table" class="tableCss">
 				<thead>

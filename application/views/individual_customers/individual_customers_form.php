@@ -16,7 +16,7 @@ $countryd = $this->Geo_countries_model->get_all();
 		</div>
 	</div>
 	<div class="card">
-		<div class="card-body" style="border: thick #2a389d solid;border-radius: 14px;">
+		<div class="card-body" style="border: thick #24C16B solid;border-radius: 14px;">
         <h2 style="margin-top:0px">Individual customer <?php echo $button ?></h2>
         <form action="<?php echo $action; ?>" method="post" >
 			<hr>

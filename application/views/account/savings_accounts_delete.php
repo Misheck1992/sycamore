@@ -10,7 +10,7 @@
 		</div>
 	</div>
 	<div class="card">
-		<div class="card-body" style="border: thick #2a389d solid;border-radius: 14px;">
+		<div class="card-body" style="border: thick #24C16B solid;border-radius: 14px;">
 <!--			<a href="--><?php //echo base_url('account/create')?><!--" class="btn btn-sm btn-primary"><i class="anticon anticon-plus-square" style="color: white; font-size: 20px;"></i>Add Savings account</a>-->
 			<div class="m-t-25">
 				<table id="data-table" class="table">

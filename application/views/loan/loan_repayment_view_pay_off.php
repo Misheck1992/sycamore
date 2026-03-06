@@ -13,7 +13,7 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
         </div>
     </div>
     <div class="card">
-        <div class="card-body" style="border: thick #2a389d solid;border-radius: 14px;">
+        <div class="card-body" style="border: thick #24C16B solid;border-radius: 14px;">
             <div class="row">
                 <div class="col-lg-3 border-right">
                     <h2>Loan Info</h2>

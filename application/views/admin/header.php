@@ -28,7 +28,8 @@ if(!empty($toggles)){
     <!-- page css -->
     <link href="<?php echo base_url('admin_assets')?>/vendors/datatables/dataTables.bootstrap.min.css" rel="stylesheet">
     <!-- Core css -->
-    <link href="<?php echo base_url('admin_assets')?>/css/app.min.css" rel="stylesheet">
+    <link href="<?php echo base_url('admin_assets')?>/css/app.min.css?v=<?php echo time(); ?>" rel="stylesheet">
+    <link href="<?php echo base_url('admin_assets')?>/css/theme-colors.css?v=<?php echo time(); ?>" rel="stylesheet">
     <link href="<?php echo base_url('admin_assets/')?>css/toastr.min.css" rel="stylesheet">
     <link href="//cdn.quilljs.com/1.3.6/quill.bubble.css" rel="stylesheet">
     <link href="<?php echo base_url('jquery-ui/')?>jquery-ui.css" rel="stylesheet">
@@ -101,7 +102,7 @@ if(!empty($toggles)){
         .dashboard-stat.blue {
             background-color: #337ab7;
         }  .dashboard-stat.green {
-               background-color: #2a389d;
+               background-color: #24C16B;
            }
         .dashboard-stat.red {
             background-color: #e7505a;
@@ -120,7 +121,7 @@ if(!empty($toggles)){
             border: 1px solid #ccc;
         }
         hr.dash {
-            border: 1px solid #2a389d;
+            border: 1px solid #24C16B;
         }
 
         legend {
@@ -244,7 +245,7 @@ if(!empty($toggles)){
             transform:none;
         }
         .selector-item_radio:checked + .selector-item_label{
-            background-color:#2a389d;
+            background-color:#24C16B;
             color:white;
             box-shadow:0 0 4px rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.5);
             transform:translateY(-2px);
@@ -262,7 +263,7 @@ if(!empty($toggles)){
 <div class="app is-primary">
     <div class="layout">
         <!-- Header START -->
-        <div class="header" style="border:thin #2a389d solid;border-radius: 50px 50px 0px 0px;">
+        <div class="header" style="border:thin #24C16B solid;border-radius: 50px 50px 0px 0px;">
             <div class="logo logo-dark">
                 <a href="<?php echo base_url('Admin')?>">
                     <img src="<?php echo base_url('uploads/').$settings->logo?>" alt="Logo">
@@ -287,10 +288,10 @@ if(!empty($toggles)){
                             <i class="anticon"></i>
                         </a>
                     </li>
-                    <h5 style="font-family:'fantasy';color: #2a389d; font-weight: bolder;background-color: #fff; padding: 0.5em;border-radius: 50px 0px 50px 0px;">Welcome to Finance Realm System  </h5>
+                    <h5 style="font-family:'fantasy';color: #24C16B; font-weight: bolder;background-color: #fff; padding: 0.5em;border-radius: 50px 0px 50px 0px;">Welcome to Finance Realm System  </h5>
                 </ul>
                 <ul class="nav-right">
-                    <h5 style="font-family:'fantasy';color: #2a389d; font-weight: bolder;background-color: #fff; padding: 0.5em;border-radius: 12px;">CURRENT USER: <font color="#2a389d" style="text-underline: green;"><?php echo $this->session->userdata('Firstname')." ".$this->session->userdata('Lastname')."(".$this->session->userdata('RoleName').")"; ?></font> </h5>
+                    <h5 style="font-family:'fantasy';color: #24C16B; font-weight: bolder;background-color: #fff; padding: 0.5em;border-radius: 12px;">CURRENT USER: <font color="#24C16B" style="text-underline: green;"><?php echo $this->session->userdata('Firstname')." ".$this->session->userdata('Lastname')."(".$this->session->userdata('RoleName').")"; ?></font> </h5>
 
                     <li class="dropdown dropdown-animated scale-left">
                         <div class="pointer" data-toggle="dropdown">
@@ -339,7 +340,7 @@ if(!empty($toggles)){
 
         <!-- Side Nav START -->
         <div class="side-nav">
-            <div class="side-nav-inner" style="border: thin solid #2a389d; border-radius: 50px 0px 50px 0px;">
+            <div class="side-nav-inner" style="border: thin solid #0e9970; border-radius: 50px 0px 50px 0px;">
                 <br>
 
                 <ul class="side-nav-menu scrollable">

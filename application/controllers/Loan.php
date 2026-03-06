@@ -1114,7 +1114,7 @@ class Loan extends CI_Controller
         }
 
         // Return the amortization schedule
-        $table = $table . "<tr style='color: white; background-color: #2a389d'>";
+        $table = $table . "<tr style='color: white; background-color: #0e9970'>";
         $table = $table . "<td width='30'>-</td>";
         $table = $table . "<td width='30'>-</td>";
 
