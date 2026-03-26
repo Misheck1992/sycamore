@@ -135,6 +135,16 @@ class Transactions_model extends CI_Model
         $this->db->insert($this->table, $data);
     }
 
+    /**
+     * Check whether a payment reference number is already used.
+     * Returns the existing transaction row if found, or NULL if the reference is free.
+     */
+    function check_duplicate_reference($payment_reference)
+    {
+        $this->db->where('payment_reference', $payment_reference);
+        return $this->db->get($this->table)->row();
+    }
+
     // update data
     function update($id, $data)
     {

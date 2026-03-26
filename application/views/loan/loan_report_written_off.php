@@ -80,7 +80,7 @@ $branches = get_all('branches');
                             <select name="status" id="status" class="form-control">
                                 <option value="All">All Statuses</option>
 
-                                <option value="WRITTEN-OFF" <?php if($this->input->get('status') == "WRITTEN-OFF") echo 'selected'; ?>>Written Off</option>
+                                <option value="WRITTEN_OFF" <?php if($this->input->get('status') == "WRITTEN_OFF") echo 'selected'; ?>>Written Off</option>
                             </select>
                         </div>
                     </div>

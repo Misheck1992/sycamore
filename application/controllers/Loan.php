@@ -1725,6 +1725,29 @@ class Loan extends CI_Controller
 
         $proof = $this->input->post('pay_proof');
         $paid_date = $this->input->post('pdate');
+
+        // --- Payment Reference validation ---
+        $payment_reference = trim($this->input->post('payment_reference', TRUE));
+        $payment_type      = trim($this->input->post('payment_type', TRUE));
+
+        if (empty($payment_reference)) {
+            $this->toaster->error('Payment reference is required. Please enter the Transaction ID (bank) or Receipt Number (cash).');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+        if (!in_array($payment_type, ['bank', 'cash'])) {
+            $this->toaster->error('Please select a valid payment type (Bank or Cash).');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+        $dup = $this->Transactions_model->check_duplicate_reference($payment_reference);
+        if (!empty($dup)) {
+            $this->toaster->error('Duplicate payment reference detected. Reference "' . htmlspecialchars($payment_reference, ENT_QUOTES, 'UTF-8') . '" has already been used. Please verify the proof of payment and try again.');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+        // --- End payment reference validation ---
+
         $loan_account = get_by_id('loan', 'loan_id', $loan_number);
         $tid = "TR-S" . rand(100, 9999) . date('Y') . date('m') . date('d');
         $get_account = $this->Tellering_model->get_teller_account($this->session->userdata('user_id'));
@@ -1748,13 +1771,28 @@ class Loan extends CI_Controller
                     $do_transactions = $this->Account_model->transfer_funds($loan_account->loan_number, $recepientt->account_number, $amount, $tid, $paid_date);
                     if ($do_transactions == 'success') {
                         $this->Payement_schedules_model->new_pay_new($loan_number, $pay_number, $repay_amounts, $paid_date, $tid);
+
+                        // Record the transaction with payment reference
+                        $trans_data = array(
+                            'ref'               => $tid,
+                            'loan_id'           => $loan_number,
+                            'amount'            => $amount,
+                            'transaction_type'  => 1,
+                            'payment_number'    => $pay_number,
+                            'payment_reference' => $payment_reference,
+                            'payment_type'      => $payment_type,
+                            'added_by'          => $this->session->userdata('user_id'),
+                        );
+                        $this->Transactions_model->insert($trans_data);
+
                         $logger = array(
-
                             'user_id' => $this->session->userdata('user_id'),
-                            'activity' => 'Paid a loan, loan ID:' . ' ' . $loan_number . ' ' . ' from payment number' . ' ' . $pay_number .
-                                ' ' . 'amount' . ' ' . $amount
-
-
+                            'activity' => 'Loan Pay-Off: Trans Ref: ' . $tid .
+                                          ' | Pay Ref: ' . $payment_reference .
+                                          ' | Type: ' . strtoupper($payment_type) .
+                                          ' | Loan ID: ' . $loan_number .
+                                          ' | Payment #: ' . $pay_number .
+                                          ' | Amount: MWK ' . number_format($amount, 2),
                         );
                         log_activity($logger);
                         $this->nullify_schedules($loan_number,$middlepayment,$totalbalance);
@@ -1833,6 +1871,22 @@ class Loan extends CI_Controller
         $this->Account_model->cash_transaction($teller_account,$account1,$amount,$mode,$tid,$date);
         return true;
     }
+    /**
+     * AJAX endpoint — check whether a payment reference number is already used.
+     * Returns JSON: { "duplicate": true|false }
+     */
+    public function check_payment_reference()
+    {
+        header('Content-Type: application/json');
+        $ref = trim($this->input->post('payment_reference', TRUE));
+        if (empty($ref)) {
+            echo json_encode(['duplicate' => false]);
+            return;
+        }
+        $existing = $this->Transactions_model->check_duplicate_reference($ref);
+        echo json_encode(['duplicate' => !empty($existing)]);
+    }
+
     public function pay_loan(){
         $loan_number = $this->input->post('loan_id');
         $pay_number = $this->input->post('payment_number');
@@ -1844,6 +1898,28 @@ class Loan extends CI_Controller
 
 // Format the DateTime object to the desired format
         $proof = $datetime->format('Y-m-d H:i:s');
+
+        // --- Payment Reference validation ---
+        $payment_reference = trim($this->input->post('payment_reference', TRUE));
+        $payment_type      = trim($this->input->post('payment_type', TRUE));
+
+        if (empty($payment_reference)) {
+            $this->toaster->error('Payment reference is required. Please enter the Transaction ID (bank) or Receipt Number (cash).');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+        if (!in_array($payment_type, ['bank', 'cash'])) {
+            $this->toaster->error('Please select a valid payment type (Bank or Cash).');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+        $dup = $this->Transactions_model->check_duplicate_reference($payment_reference);
+        if (!empty($dup)) {
+            $this->toaster->error('Duplicate payment reference detected. Reference "' . htmlspecialchars($payment_reference, ENT_QUOTES, 'UTF-8') . '" has already been used. Please verify the proof of payment and try again.');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+        // --- End payment reference validation ---
 
         $loan_n = get_by_id('loan','loan_id',$loan_number);
         $collection_acccount = get_by_id('account','collection_account','Yes');
@@ -1894,12 +1970,27 @@ class Loan extends CI_Controller
 
                 $this->Account_model->transfer_funds1($loan_n->loan_number, $collection_acccount->account_number,$amount, $tid,$proof);
 
+                // Record the transaction with payment reference for duplicate-prevention tracking
+                $trans_data = array(
+                    'ref'              => $tid,
+                    'loan_id'          => $loan_number,
+                    'amount'           => $amount,
+                    'transaction_type' => 1,
+                    'payment_number'   => $pay_number,
+                    'payment_reference'=> $payment_reference,
+                    'payment_type'     => $payment_type,
+                    'added_by'         => $this->session->userdata('user_id'),
+                );
+                $this->Transactions_model->insert($trans_data);
+
                 // Get loan and customer details for enhanced logging
                 $customer_data = $this->get_customer_name_for_loan($loan_number);
 
                 $logger = array(
                     'user_id' => $this->session->userdata('user_id'),
                     'activity' => 'Loan Payment: Trans Ref: ' . $tid .
+                                  ' | Pay Ref: ' . $payment_reference .
+                                  ' | Type: ' . strtoupper($payment_type) .
                                   ' | Amount: MWK ' . number_format($amount, 2) .
                                   ' | Client: ' . $customer_data['customer_name'] .
                                   ' | Loan #: ' . (!empty($customer_data['loan_details']) ? $customer_data['loan_details']->loan_number : $loan_number) .
@@ -3270,6 +3361,9 @@ class Loan extends CI_Controller
         $officer = $this->input->post('officer');
         $branch = $this->input->post('branch');
         $status = $this->input->post('status');
+        if ($status === 'WRITTEN-OFF') {
+            $status = 'WRITTEN_OFF';
+        }
         $date_from = $this->input->post('date_from');
         $date_to = $this->input->post('date_to');
 
@@ -3308,11 +3402,15 @@ class Loan extends CI_Controller
 
         // Execute the cURL request
         $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
         // Check for errors
         if (curl_errno($ch)) {
             // Handle cURL error
             $this->toaster->error('Error: ' . curl_error($ch));
+            redirect(site_url('report'));
+        } else if ($http_code < 200 || $http_code >= 300) {
+            $this->toaster->error('Error, report service returned HTTP ' . $http_code . '. Please retry.');
             redirect(site_url('report'));
         } else {
             // Display success message and redirect
@@ -3330,6 +3428,9 @@ class Loan extends CI_Controller
         $officer = $this->input->post('officer');
         $branch = $this->input->post('branch');
         $status = $this->input->post('status');
+        if ($status === 'WRITTEN-OFF') {
+            $status = 'WRITTEN_OFF';
+        }
         $date_from = $this->input->post('date_from');
         $date_to = $this->input->post('date_to');
 
@@ -3368,11 +3469,15 @@ class Loan extends CI_Controller
 
         // Execute the cURL request
         $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
         // Check for errors
         if (curl_errno($ch)) {
             // Handle cURL error
             $this->toaster->error('Error: ' . curl_error($ch));
+            redirect(site_url('report'));
+        } else if ($http_code < 200 || $http_code >= 300) {
+            $this->toaster->error('Error, write-off report service returned HTTP ' . $http_code . '. Please retry.');
             redirect(site_url('report'));
         } else {
             // Display success message and redirect

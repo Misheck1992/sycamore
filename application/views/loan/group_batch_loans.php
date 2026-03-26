@@ -375,7 +375,7 @@
                         <td id="payment-amount">MK 0.00</td>
                     </tr>
                 </table>
-                <form action="<?php echo base_url('loan/pay_loan')?>" class="form-row" method="POST">
+                <form action="<?php echo base_url('loan/pay_loan')?>" class="form-row" method="POST" id="batch_payment_form">
                     <div class="form-group col-lg-12" style="padding: 2em;">
                         <label for="amount">Enter deposit amount</label>
                         <input type="hidden" name="loan_id" id="payment-loan-id">
@@ -384,11 +384,31 @@
                         <input type="hidden" name="topay_amount" id="payment-topay-amount">
                         <input type="hidden" name="payment_method" value="0">
                         <div class="form-group col-12 mt-3">
+                            <label for="batch_payment_type"><strong>Payment Type <span style="color:red;">*</span></strong></label>
+                            <select class="form-control" name="payment_type" id="batch_payment_type" required onchange="updateRefLabel('batch_payment_type','batch_ref_label','batch_payment_reference')">
+                                <option value="">-- Select Payment Type --</option>
+                                <option value="bank">Bank Transfer</option>
+                                <option value="cash">Cash</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-12 mt-2">
+                            <label id="batch_ref_label" for="batch_payment_reference"><strong>Reference Number <span style="color:red;">*</span></strong></label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" name="payment_reference" id="batch_payment_reference"
+                                       placeholder="Enter Transaction ID or Receipt Number" required
+                                       oninput="checkPaymentRef(this,'batch_ref_feedback')" autocomplete="off" />
+                                <div class="input-group-append">
+                                    <span class="input-group-text" id="batch_ref_feedback"></span>
+                                </div>
+                            </div>
+                            <small class="form-text text-muted">Bank payment: enter the Transaction ID from the bank statement. Cash: enter the Receipt Number.</small>
+                        </div>
+                        <div class="form-group col-12 mt-3">
                             <label for="pdate">Payment date</label>
                             <input type="datetime-local" class="form-control" name="pdate" id="pdate" />
                         </div>
                     </div>
-                    <button class="btn btn-sm btn-block btn-danger" type="submit">Submit Payment</button>
+                    <button class="btn btn-sm btn-block btn-danger" type="submit" id="submit_batch_payment">Submit Payment</button>
                 </form>
             </div>
         </div>
@@ -422,7 +442,7 @@
                         <td id="payoff-amount">MK 0.00</td>
                     </tr>
                 </table>
-                <form action="<?php echo base_url('loan/finish_loan')?>" class="form-row" method="POST">
+                <form action="<?php echo base_url('loan/finish_loan')?>" class="form-row" method="POST" id="batch_payoff_form">
                     <div class="form-group col-lg-12" style="padding: 2em;">
                         <label for="amount">Pay Off Amount</label>
                         <input type="hidden" name="loan_id" id="payoff-loan-id">
@@ -434,11 +454,31 @@
                         <input type="hidden" name="payment_method" value="0">
                         <input type="hidden" name="pay_proof" value="Null">
                         <div class="form-group col-12 mt-3">
+                            <label for="batch_payoff_type"><strong>Payment Type <span style="color:red;">*</span></strong></label>
+                            <select class="form-control" name="payment_type" id="batch_payoff_type" required onchange="updateRefLabel('batch_payoff_type','batch_payoff_ref_label','batch_payoff_reference')">
+                                <option value="">-- Select Payment Type --</option>
+                                <option value="bank">Bank Transfer</option>
+                                <option value="cash">Cash</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-12 mt-2">
+                            <label id="batch_payoff_ref_label" for="batch_payoff_reference"><strong>Reference Number <span style="color:red;">*</span></strong></label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" name="payment_reference" id="batch_payoff_reference"
+                                       placeholder="Enter Transaction ID or Receipt Number" required
+                                       oninput="checkPaymentRef(this,'batch_payoff_ref_feedback')" autocomplete="off" />
+                                <div class="input-group-append">
+                                    <span class="input-group-text" id="batch_payoff_ref_feedback"></span>
+                                </div>
+                            </div>
+                            <small class="form-text text-muted">Bank payment: enter the Transaction ID from the bank statement. Cash: enter the Receipt Number.</small>
+                        </div>
+                        <div class="form-group col-12 mt-3">
                             <label for="pdate">Payment date</label>
                             <input type="date" class="form-control" name="pdate" id="payoff-pdate" />
                         </div>
                     </div>
-                    <button class="btn btn-sm btn-block btn-danger" type="submit">Pay Off Loan</button>
+                    <button class="btn btn-sm btn-block btn-danger" type="submit" id="submit_batch_payoff">Pay Off Loan</button>
                 </form>
             </div>
         </div>
@@ -676,6 +716,63 @@ function payLoanBatch(loanId, loanNumber) {
             alert('Error fetching payment information');
         }
     });
+}
+
+var refCheckTimerBatch = null;
+function checkPaymentRef(input, feedbackId) {
+    clearTimeout(refCheckTimerBatch);
+    var val = input.value.trim();
+    var feedback = document.getElementById(feedbackId);
+    var submitBtn = input.closest('form').querySelector('[type=submit]');
+    if (val.length === 0) {
+        feedback.innerHTML = '';
+        feedback.style.color = '';
+        if (submitBtn) submitBtn.disabled = false;
+        return;
+    }
+    refCheckTimerBatch = setTimeout(function() {
+        feedback.innerHTML = '&#8230;';
+        feedback.style.color = '#aaa';
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '<?php echo base_url('loan/check_payment_reference'); ?>', true);
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4 && xhr.status === 200) {
+                try {
+                    var res = JSON.parse(xhr.responseText);
+                    if (res.duplicate) {
+                        feedback.innerHTML = '&#10008; Duplicate reference';
+                        feedback.style.color = 'red';
+                        input.style.borderColor = 'red';
+                        if (submitBtn) submitBtn.disabled = true;
+                    } else {
+                        feedback.innerHTML = '&#10004; OK';
+                        feedback.style.color = 'green';
+                        input.style.borderColor = 'green';
+                        if (submitBtn) submitBtn.disabled = false;
+                    }
+                } catch(e) {}
+            }
+        };
+        xhr.send('payment_reference=' + encodeURIComponent(val));
+    }, 500);
+}
+
+function updateRefLabel(selectId, labelId, inputId) {
+    var sel = document.getElementById(selectId);
+    var lbl = document.getElementById(labelId);
+    var inp = document.getElementById(inputId);
+    if (!sel || !lbl || !inp) return;
+    if (sel.value === 'bank') {
+        lbl.textContent = 'Bank Transaction ID';
+        inp.placeholder = 'Enter bank transaction ID from statement';
+    } else if (sel.value === 'cash') {
+        lbl.textContent = 'Cash Receipt Number';
+        inp.placeholder = 'Enter receipt number issued at point of payment';
+    } else {
+        lbl.textContent = 'Payment Reference';
+        inp.placeholder = 'Select payment type first';
+    }
 }
 
 function formatNumber(input) {

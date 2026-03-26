@@ -322,7 +322,7 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
 
 
                 </table>
-                <form action="<?php echo base_url('loan/finish_loan')?>" class="form-row" method="POST" >
+                <form action="<?php echo base_url('loan/finish_loan')?>" class="form-row" method="POST" id="finish_payment_modal_form">
 
                     <div class="form-group col-lg-12" style="padding: 5em;">
                         <label for="date">To pay amount  </label>
@@ -350,15 +350,30 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
                             $total_payoff = $get_middle_schedule->amount;
                         }
 
-                        // Example of fetching the middle schedule based on $v
-
-//                        echo "Total Payoff: " . $total_payoff;
-//                        echo "Middle Schedule Loan Balance: " . $get_middle_schedule->loan_balance;
-
                         ?>
 
 
                         <input style="border: thin red solid;" type="text" class="form-control" name="amount"  value="<?php echo $total_payoff + $get_middle_schedule->loan_balance ; ?>" placeholder="Enter pay amount" readonly required />
+                        <div class="form-group col-12 mt-3">
+                            <label for="payment_type_finish"><strong>Payment Type <span style="color:red;">*</span></strong></label>
+                            <select class="form-control" name="payment_type" id="payment_type_finish" required onchange="updateRefLabel('payment_type_finish','ref_label_finish','payment_reference_finish')">
+                                <option value="">-- Select Payment Type --</option>
+                                <option value="bank">Bank Transfer</option>
+                                <option value="cash">Cash</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-12 mt-2">
+                            <label id="ref_label_finish" for="payment_reference_finish"><strong>Reference Number <span style="color:red;">*</span></strong></label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" name="payment_reference" id="payment_reference_finish"
+                                       placeholder="Enter Transaction ID or Receipt Number" required
+                                       oninput="checkPaymentRef(this,'ref_feedback_finish')" autocomplete="off" />
+                                <div class="input-group-append">
+                                    <span class="input-group-text" id="ref_feedback_finish"></span>
+                                </div>
+                            </div>
+                            <small class="form-text text-muted">Bank payment: enter the Transaction ID from the bank statement. Cash: enter the Receipt Number.</small>
+                        </div>
                         <div class="form-group col-12">
                             <label for="pdate">Payment date</label>
                             <input type="date" class="form-control" name="pdate" id="pdate"   />
@@ -373,7 +388,7 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
                         <input type="text" id="id_front1"  name="pay_proof" value="Null" hidden required>
 
                     </div>
-                    <button class="btn btn-sm btn-block btn-danger" type="submit">Submit Payment</button>
+                    <button class="btn btn-sm btn-block btn-danger" type="submit" id="submit_payment_finish">Submit Payment</button>
                 </form>
             </div>
         </div>
@@ -405,7 +420,7 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
 
 
                 </table>
-                <form action="<?php echo base_url('loan/pay_loan')?>" class="form-row" method="POST" >
+                <form action="<?php echo base_url('loan/pay_loan')?>" class="form-row" method="POST" id="payment_modal_form">
 
                     <div class="form-group col-lg-12" style="padding: 5em;">
                         <label for="date">Enter deposit amount  </label>
@@ -415,13 +430,33 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
                         <input style="border: thin red solid;" type="text" class="form-control" name="topay_amount"  value="<?php echo $next_payment_details->amount?>" placeholder="Enter pay amount"  hidden />
 
                         <input type="text" name="payment_method" value="0" hidden>
+                        <div class="form-group col-12 mt-3">
+                            <label for="payment_type_reg"><strong>Payment Type <span style="color:red;">*</span></strong></label>
+                            <select class="form-control" name="payment_type" id="payment_type_reg" required onchange="updateRefLabel('payment_type_reg','ref_label_reg','payment_reference_reg')">
+                                <option value="">-- Select Payment Type --</option>
+                                <option value="bank">Bank Transfer</option>
+                                <option value="cash">Cash</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-12 mt-2">
+                            <label id="ref_label_reg" for="payment_reference_reg"><strong>Reference Number <span style="color:red;">*</span></strong></label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" name="payment_reference" id="payment_reference_reg"
+                                       placeholder="Enter Transaction ID or Receipt Number" required
+                                       oninput="checkPaymentRef(this,'ref_feedback_reg')" autocomplete="off" />
+                                <div class="input-group-append">
+                                    <span class="input-group-text" id="ref_feedback_reg"></span>
+                                </div>
+                            </div>
+                            <small class="form-text text-muted">Bank payment: enter the Transaction ID from the bank statement. Cash: enter the Receipt Number.</small>
+                        </div>
                         <div class="form-group col-12">
                             <label for="pdate">Payment date</label>
                             <input type="datetime-local" class="form-control" name="pdate" id="pdate"   />
                         </div>
 
                     </div>
-                    <button class="btn btn-sm btn-block btn-danger" type="submit">Submit Payment</button>
+                    <button class="btn btn-sm btn-block btn-danger" type="submit" id="submit_payment_reg">Submit Payment</button>
                 </form>
             </div>
         </div>
@@ -567,3 +602,60 @@ function getMedianSchedule($totalSchedules) {
     return (int)$medianScheduleIndex;
 }
 ?>
+<script>
+// Payment reference duplicate check
+var refCheckTimer = null;
+function checkPaymentRef(input, feedbackId) {
+    clearTimeout(refCheckTimer);
+    var val = input.value.trim();
+    var feedback = document.getElementById(feedbackId);
+    var submitBtn = input.closest('form').querySelector('[type=submit]');
+    if (val.length === 0) {
+        feedback.innerHTML = '';
+        feedback.style.color = '';
+        if (submitBtn) submitBtn.disabled = false;
+        return;
+    }
+    refCheckTimer = setTimeout(function() {
+        feedback.innerHTML = '&#8203;&#8203;&#8230;';
+        feedback.style.color = '#aaa';
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '<?php echo base_url('loan/check_payment_reference'); ?>', true);
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4 && xhr.status === 200) {
+                try {
+                    var res = JSON.parse(xhr.responseText);
+                    if (res.duplicate) {
+                        feedback.innerHTML = '&#10008; Duplicate';
+                        feedback.style.color = 'red';
+                        input.style.borderColor = 'red';
+                        if (submitBtn) submitBtn.disabled = true;
+                    } else {
+                        feedback.innerHTML = '&#10004; OK';
+                        feedback.style.color = 'green';
+                        input.style.borderColor = 'green';
+                        if (submitBtn) submitBtn.disabled = false;
+                    }
+                } catch(e) {}
+            }
+        };
+        xhr.send('payment_reference=' + encodeURIComponent(val));
+    }, 500);
+}
+function updateRefLabel(selectId, labelId, inputId) {
+    var type = document.getElementById(selectId).value;
+    var label = document.getElementById(labelId);
+    var input = document.getElementById(inputId);
+    if (type === 'bank') {
+        label.innerHTML = '<strong>Bank Transaction ID <span style="color:red;">*</span></strong>';
+        input.placeholder = 'Enter Transaction ID from bank statement';
+    } else if (type === 'cash') {
+        label.innerHTML = '<strong>Receipt Number <span style="color:red;">*</span></strong>';
+        input.placeholder = 'Enter Receipt Number';
+    } else {
+        label.innerHTML = '<strong>Reference Number <span style="color:red;">*</span></strong>';
+        input.placeholder = 'Enter Transaction ID or Receipt Number';
+    }
+}
+</script>
