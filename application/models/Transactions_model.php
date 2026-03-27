@@ -9,6 +9,7 @@ class Transactions_model extends CI_Model
     public $table = 'transactions';
     public $id = 'transaction_id';
     public $order = 'DESC';
+    private $table_fields = null;
 
     function __construct()
     {
@@ -132,7 +133,49 @@ class Transactions_model extends CI_Model
     // insert data
     function insert($data)
     {
-        $this->db->insert($this->table, $data);
+        $fields = $this->get_table_fields();
+
+        $fallback_ref = '';
+        if (isset($data['payment_reference']) && trim((string)$data['payment_reference']) !== '') {
+            $fallback_ref = trim((string)$data['payment_reference']);
+        } elseif (isset($data['reference']) && trim((string)$data['reference']) !== '') {
+            $fallback_ref = trim((string)$data['reference']);
+        } elseif (isset($data['ref']) && trim((string)$data['ref']) !== '') {
+            $fallback_ref = trim((string)$data['ref']);
+        } else {
+            $fallback_ref = 'SYS-' . uniqid('', true);
+        }
+
+        // Backward-compatible mapping for environments that use legacy columns.
+        if (isset($data['payment_reference']) && !in_array('payment_reference', $fields) && in_array('reference', $fields)) {
+            $data['reference'] = $data['payment_reference'];
+        }
+
+        if (isset($data['payment_type']) && !in_array('payment_type', $fields) && in_array('method', $fields)) {
+            $type = strtolower(trim((string)$data['payment_type']));
+            $data['method'] = ($type === 'bank') ? 1 : 0;
+        }
+
+        if (in_array('reference', $fields) && (!isset($data['reference']) || trim((string)$data['reference']) === '')) {
+            $data['reference'] = $fallback_ref;
+        }
+
+        if (!isset($data['method']) && in_array('method', $fields)) {
+            $data['method'] = 0;
+        }
+
+        if (in_array('payment_reference', $fields) && (!isset($data['payment_reference']) || trim((string)$data['payment_reference']) === '')) {
+            $data['payment_reference'] = $fallback_ref;
+        }
+
+        $filtered = array();
+        foreach ($data as $key => $value) {
+            if (in_array($key, $fields)) {
+                $filtered[$key] = $value;
+            }
+        }
+
+        $this->db->insert($this->table, $filtered);
     }
 
     /**
@@ -141,8 +184,27 @@ class Transactions_model extends CI_Model
      */
     function check_duplicate_reference($payment_reference)
     {
-        $this->db->where('payment_reference', $payment_reference);
-        return $this->db->get($this->table)->row();
+        $fields = $this->get_table_fields();
+
+        if (in_array('payment_reference', $fields)) {
+            $this->db->where('payment_reference', $payment_reference);
+            return $this->db->get($this->table)->row();
+        }
+
+        if (in_array('reference', $fields)) {
+            $this->db->where('reference', $payment_reference);
+            return $this->db->get($this->table)->row();
+        }
+
+        return null;
+    }
+
+    private function get_table_fields()
+    {
+        if ($this->table_fields === null) {
+            $this->table_fields = $this->db->list_fields($this->table);
+        }
+        return $this->table_fields;
     }
 
     // update data

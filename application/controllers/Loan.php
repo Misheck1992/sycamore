@@ -436,17 +436,67 @@ class Loan extends CI_Controller
         }
         
         // Get all loans for the selected batch
-        $this->db->select('loan.*, individual_customers.Firstname, individual_customers.Lastname, 
-                          individual_customers.ClientId, loan_products.product_name,
-                          groups.group_name, groups.group_code')
+        $this->db->select('loan.*, 
+                  individual_customers.Firstname, individual_customers.Lastname,
+                  customer_groups.group_name as customer_group_name,
+                  individual_customers.ClientId, loan_products.product_name,
+                  groups.group_name, groups.group_code')
                  ->from('loan')
-                 ->join('individual_customers', 'individual_customers.id = loan.loan_customer', 'left')
+             ->join('individual_customers', 'individual_customers.id = loan.loan_customer', 'left')
+             ->join('groups as customer_groups', 'customer_groups.group_id = loan.loan_customer', 'left')
                  ->join('loan_products', 'loan_products.loan_product_id = loan.loan_product', 'left')
                  ->join('groups', 'groups.group_id = loan.group_id', 'left')
                  ->where('loan.batch', $batch)
                  ->order_by('loan.loan_id', 'ASC');
         
         $data['loans'] = $this->db->get()->result();
+
+        // Build a reliable display name for each row, handling legacy mappings.
+        foreach ($data['loans'] as $loan_row) {
+            $member_name = trim((string)$loan_row->Firstname . ' ' . (string)$loan_row->Lastname);
+
+            if ($member_name === '' && !empty($loan_row->customer_group_name)) {
+                $member_name = (string)$loan_row->customer_group_name;
+            }
+
+            if ($member_name === '' && !empty($loan_row->loan_customer)) {
+                $fallback_individual = $this->db->select('Firstname, Lastname')
+                    ->from('individual_customers')
+                    ->group_start()
+                    ->where('id', $loan_row->loan_customer)
+                    ->or_where('ClientId', $loan_row->loan_customer)
+                    ->group_end()
+                    ->limit(1)
+                    ->get()
+                    ->row();
+
+                if (!empty($fallback_individual)) {
+                    $member_name = trim((string)$fallback_individual->Firstname . ' ' . (string)$fallback_individual->Lastname);
+                }
+            }
+
+            if ($member_name === '' && !empty($loan_row->loan_customer)) {
+                $fallback_group = $this->db->select('group_name')
+                    ->from('groups')
+                    ->group_start()
+                    ->where('group_id', $loan_row->loan_customer)
+                    ->or_where('group_code', $loan_row->loan_customer)
+                    ->group_end()
+                    ->limit(1)
+                    ->get()
+                    ->row();
+
+                if (!empty($fallback_group)) {
+                    $member_name = (string)$fallback_group->group_name;
+                }
+            }
+
+            if ($member_name === '') {
+                $member_name = 'Member #' . $loan_row->loan_customer;
+            }
+
+            $loan_row->member_name = $member_name;
+        }
         $data['batch'] = $batch;
         
         // Check user permissions for batch actions
@@ -765,6 +815,375 @@ class Loan extends CI_Controller
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
         }
+    }
+
+    public function batch_pay(){
+        header('Content-Type: application/json');
+
+        try {
+            $batch = trim($this->input->post('batch', TRUE));
+            $raw_total_amount = $this->input->post('total_amount', TRUE);
+            $payment_reference = trim($this->input->post('payment_reference', TRUE));
+            $payment_type = trim($this->input->post('payment_type', TRUE));
+            $input_datetime = trim($this->input->post('pdate', TRUE));
+            $allocations = $this->input->post('allocations');
+
+            if (empty($batch)) {
+                echo json_encode(['success' => false, 'message' => 'Batch number is required.']);
+                return;
+            }
+
+            $normalized_total = str_replace([',', ' '], '', (string)$raw_total_amount);
+            if (!is_numeric($normalized_total) || (float)$normalized_total <= 0) {
+                echo json_encode(['success' => false, 'message' => 'Please enter a valid total deposited amount.']);
+                return;
+            }
+            $total_amount = round((float)$normalized_total, 2);
+
+            if (empty($payment_reference)) {
+                echo json_encode(['success' => false, 'message' => 'Transaction ID / Receipt Number is required.']);
+                return;
+            }
+
+            if (!in_array($payment_type, ['bank', 'cash'])) {
+                echo json_encode(['success' => false, 'message' => 'Please select a valid payment type (Bank or Cash).']);
+                return;
+            }
+
+            if (!is_array($allocations) || empty($allocations)) {
+                echo json_encode(['success' => false, 'message' => 'Please provide member allocations for this batch payment.']);
+                return;
+            }
+
+            $existing_reference = $this->Transactions_model->check_duplicate_reference($payment_reference);
+            if (!empty($existing_reference)) {
+                echo json_encode(['success' => false, 'message' => 'Duplicate payment reference detected. Please verify and use a new reference.']);
+                return;
+            }
+
+            $proof = date('Y-m-d H:i:s');
+            if (!empty($input_datetime)) {
+                $datetime = new DateTime($input_datetime);
+                $proof = $datetime->format('Y-m-d H:i:s');
+            }
+
+            $clean_allocations = [];
+            $allocation_sum = 0.00;
+            foreach ($allocations as $loan_id => $amount_value) {
+                $loan_id = (int)$loan_id;
+                if ($loan_id <= 0) {
+                    continue;
+                }
+
+                $normalized_amount = str_replace([',', ' '], '', (string)$amount_value);
+                if ($normalized_amount === '') {
+                    continue;
+                }
+
+                if (!is_numeric($normalized_amount)) {
+                    echo json_encode(['success' => false, 'message' => 'Invalid amount detected in one or more member allocations.']);
+                    return;
+                }
+
+                $amount = round((float)$normalized_amount, 2);
+                if ($amount < 0) {
+                    echo json_encode(['success' => false, 'message' => 'Allocation amounts cannot be negative.']);
+                    return;
+                }
+
+                if ($amount > 0) {
+                    $clean_allocations[$loan_id] = $amount;
+                    $allocation_sum += $amount;
+                }
+            }
+
+            $allocation_sum = round($allocation_sum, 2);
+            if (empty($clean_allocations)) {
+                echo json_encode(['success' => false, 'message' => 'Please enter at least one allocation amount greater than zero.']);
+                return;
+            }
+
+            if (abs($allocation_sum - $total_amount) > 0.01) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Total deposited amount must equal the sum of member allocations.',
+                    'expected_total' => $total_amount,
+                    'allocation_total' => $allocation_sum
+                ]);
+                return;
+            }
+
+            $loan_ids = array_keys($clean_allocations);
+            $this->db->select('loan_id, loan_number, loan_status, batch');
+            $this->db->from('loan');
+            $this->db->where('batch', $batch);
+            $this->db->where_in('loan_id', $loan_ids);
+            $batch_loans = $this->db->get()->result();
+
+            if (count($batch_loans) !== count($loan_ids)) {
+                echo json_encode(['success' => false, 'message' => 'Some selected members are not part of the chosen batch.']);
+                return;
+            }
+
+            $validated_loans = [];
+            foreach ($batch_loans as $loan) {
+                if (strtoupper(trim($loan->loan_status)) !== 'ACTIVE') {
+                    echo json_encode(['success' => false, 'message' => 'Only ACTIVE loans can be paid in batch mode.']);
+                    return;
+                }
+
+                $this->db->select('payment_number, total_late_charge');
+                $this->db->from('payement_schedules');
+                $this->db->where('loan_id', $loan->loan_id);
+                $this->db->where('status', 'NOT PAID');
+                $this->db->order_by('payment_number', 'ASC');
+                $this->db->limit(1);
+                $next_payment = $this->db->get()->row();
+
+                if (!$next_payment) {
+                    echo json_encode(['success' => false, 'message' => 'A selected member has no pending schedule to pay.']);
+                    return;
+                }
+
+                $this->db->select('SUM(amount - paid_amount) as outstanding');
+                $this->db->from('payement_schedules');
+                $this->db->where('loan_id', $loan->loan_id);
+                $this->db->where('status', 'NOT PAID');
+                $outstanding_row = $this->db->get()->row();
+
+                $outstanding = round((float)($outstanding_row ? $outstanding_row->outstanding : 0), 2);
+                $loan_amount = $clean_allocations[(int)$loan->loan_id];
+
+                if ($loan_amount > $outstanding + 0.01) {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Allocated amount for loan ' . $loan->loan_number . ' exceeds its outstanding balance.'
+                    ]);
+                    return;
+                }
+
+                $validated_loans[] = [
+                    'loan_id' => (int)$loan->loan_id,
+                    'loan_number' => $loan->loan_number,
+                    'amount' => $loan_amount,
+                    'payment_number' => (int)$next_payment->payment_number,
+                    'has_late_charges' => ((float)$next_payment->total_late_charge > 0)
+                ];
+            }
+
+            $collection_account = get_by_id('account', 'collection_account', 'Yes');
+
+            $get_account = $this->Tellering_model->get_teller_account($this->session->userdata('user_id'));
+            if (empty($get_account) && $this->session->userdata('RoleName') === 'SUPER ADMIN') {
+                $get_account = $this->Tellering_model->get_teller_account1();
+            }
+
+            // Allow repayment processing even when teller/account mapping is missing.
+            $can_move_funds = false;
+            $funding_account = null;
+            if (!empty($collection_account)) {
+                $funding_account = !empty($get_account) ? $get_account->account : $collection_account->account_number;
+                $funding_account_row = !empty($funding_account) ? $this->Account_model->get_account($funding_account) : null;
+                $collection_account_row = $this->Account_model->get_account($collection_account->account_number);
+                $can_move_funds = (!empty($funding_account_row) && !empty($collection_account_row));
+            }
+
+            $mode = 'deposit';
+            $group_tid = 'TR-B' . rand(100, 9999) . date('YmdHis');
+            $log_parts = [];
+            $warnings = [];
+
+            $this->db->trans_begin();
+
+            foreach ($validated_loans as $index => $loan_data) {
+                $loan_tid = $group_tid . '-' . ($index + 1);
+
+                if ($can_move_funds) {
+                    $loan_account_row = $this->Account_model->get_account($loan_data['loan_number']);
+                    if (!empty($loan_account_row)) {
+                        $deposit_status = $this->Account_model->cash_transaction_modified(
+                            $funding_account,
+                            $loan_data['loan_number'],
+                            $loan_data['amount'],
+                            $mode,
+                            $loan_tid,
+                            $proof,
+                            'deposit'
+                        );
+
+                        if ($deposit_status === 'success') {
+                            $this->Account_model->transfer_funds1(
+                                $loan_data['loan_number'],
+                                $collection_account->account_number,
+                                $loan_data['amount'],
+                                $loan_tid,
+                                $proof
+                            );
+                        } else {
+                            $warnings[] = 'Fund movement skipped for loan ' . $loan_data['loan_number'] . ' (deposit step failed).';
+                        }
+                    } else {
+                        $warnings[] = 'Fund movement skipped for loan ' . $loan_data['loan_number'] . ' (loan account missing).';
+                    }
+                } else {
+                    $warnings[] = 'Fund movement skipped (teller/collection account mapping unavailable).';
+                }
+
+                if ($loan_data['has_late_charges']) {
+                    $pay_result = $this->Payement_schedules_model->pay_loan_with_late_charges(
+                        $loan_data['loan_id'],
+                        $loan_data['payment_number'],
+                        $loan_data['amount'],
+                        $proof,
+                        $loan_tid
+                    );
+
+                    if (!(is_array($pay_result) && isset($pay_result['success']) && $pay_result['success'])) {
+                        $this->db->trans_rollback();
+                        $db_error = $this->db->error();
+                        $error_details = (!empty($db_error['message']) ? ' DB: ' . $db_error['message'] : '');
+                        echo json_encode(['success' => false, 'message' => 'Failed to allocate late charges for loan ' . $loan_data['loan_number'] . '.' . $error_details]);
+                        return;
+                    }
+                } else {
+                    $pay_result = $this->Payement_schedules_model->new_pay_new(
+                        $loan_data['loan_id'],
+                        $loan_data['payment_number'],
+                        $loan_data['amount'],
+                        $proof,
+                        $loan_tid
+                    );
+
+                    if (!$pay_result) {
+                        $this->db->trans_rollback();
+                        $db_error = $this->db->error();
+                        $error_details = (!empty($db_error['message']) ? ' DB: ' . $db_error['message'] : '');
+                        echo json_encode(['success' => false, 'message' => 'Failed to apply payment for loan ' . $loan_data['loan_number'] . '.' . $error_details]);
+                        return;
+                    }
+                }
+
+                $this->Transactions_model->insert([
+                    'ref' => $loan_tid,
+                    'loan_id' => $loan_data['loan_id'],
+                    'amount' => $loan_data['amount'],
+                    'transaction_type' => 1,
+                    'payment_number' => $loan_data['payment_number'],
+                    'payment_reference' => $payment_reference,
+                    'payment_type' => $payment_type,
+                    'date_stamp' => $proof,
+                    'added_by' => $this->session->userdata('user_id')
+                ]);
+
+                $log_parts[] = $loan_data['loan_number'] . ': MWK ' . number_format($loan_data['amount'], 2);
+            }
+
+            if ($this->db->trans_status() === FALSE) {
+                $this->db->trans_rollback();
+                $db_error = $this->db->error();
+                $error_details = (!empty($db_error['message']) ? ' DB: ' . $db_error['message'] : '');
+                echo json_encode(['success' => false, 'message' => 'Batch payment failed. All changes were rolled back.' . $error_details]);
+                return;
+            }
+
+            $this->db->trans_commit();
+
+            $logger = array(
+                'user_id' => $this->session->userdata('user_id'),
+                'activity' => 'Group Batch Payment: Batch ' . $batch .
+                              ' | Pay Ref: ' . $payment_reference .
+                              ' | Type: ' . strtoupper($payment_type) .
+                              ' | Total: MWK ' . number_format($total_amount, 2) .
+                              ' | Loans: ' . implode('; ', $log_parts)
+            );
+            log_activity($logger);
+
+            echo json_encode([
+                'success' => true,
+                'message' => 'Batch payment posted successfully.' . (!empty($warnings) ? ' Warnings: ' . implode(' ', array_values(array_unique($warnings))) : ''),
+                'batch' => $batch,
+                'total_amount' => $total_amount,
+                'receipt_url' => base_url('loan/print_batch_payment_receipt/') . rawurlencode($payment_reference),
+                'redirect_url' => base_url('loan/group_batch_loans/') . rawurlencode($batch)
+            ]);
+        } catch (Exception $e) {
+            if ($this->db->trans_status() !== FALSE) {
+                $this->db->trans_rollback();
+            }
+            echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+        }
+    }
+
+    public function print_batch_payment_receipt($payment_reference = null) {
+        if (empty($payment_reference)) {
+            show_404();
+            return;
+        }
+
+        $payment_reference = urldecode($payment_reference);
+
+        $transaction_fields = $this->db->list_fields('transactions');
+        $reference_column = in_array('payment_reference', $transaction_fields) ? 'payment_reference' : (in_array('reference', $transaction_fields) ? 'reference' : '');
+        $payment_type_column = in_array('payment_type', $transaction_fields) ? 'payment_type' : (in_array('method', $transaction_fields) ? 'method' : '');
+
+        if ($reference_column === '') {
+            show_404();
+            return;
+        }
+
+        $payment_type_select = $payment_type_column !== '' ? 'transactions.' . $payment_type_column . ' as payment_type_value' : '"" as payment_type_value';
+        $this->db->select('transactions.transaction_id, transactions.ref, transactions.amount, transactions.payment_number, transactions.' . $reference_column . ' as payment_reference_value, ' . $payment_type_select . ', transactions.date_stamp, loan.loan_id, loan.loan_number, loan.batch, groups.group_name, groups.group_code, individual_customers.Firstname, individual_customers.Lastname, employees.Firstname as staff_firstname, employees.Lastname as staff_lastname');
+        $this->db->from('transactions');
+        $this->db->join('loan', 'loan.loan_id = transactions.loan_id', 'left');
+        $this->db->join('groups', 'groups.group_id = loan.group_id', 'left');
+        $this->db->join('individual_customers', 'individual_customers.id = loan.loan_customer', 'left');
+        $this->db->join('employees', 'employees.id = transactions.added_by', 'left');
+        $this->db->where('transactions.' . $reference_column, $payment_reference);
+        $this->db->where('transactions.transaction_type', 1);
+        $this->db->order_by('transactions.transaction_id', 'ASC');
+        $rows = $this->db->get()->result();
+
+        if (empty($rows)) {
+            show_404();
+            return;
+        }
+
+        $total_allocated = 0;
+        $internal_refs = [];
+        foreach ($rows as $row) {
+            $total_allocated += (float)$row->amount;
+            if (!empty($row->ref)) {
+                $internal_refs[] = $row->ref;
+            }
+        }
+
+        $internal_refs = array_values(array_unique($internal_refs));
+        $first_row = $rows[0];
+        $printed_on = date('Y-m-d H:i:s');
+        $posted_on = !empty($first_row->date_stamp) ? $first_row->date_stamp : $printed_on;
+        $officer = trim(($first_row->staff_firstname ?? '') . ' ' . ($first_row->staff_lastname ?? ''));
+        $raw_payment_type = (string)($first_row->payment_type_value ?? '');
+        if ($payment_type_column === 'method') {
+            $payment_type = ((string)$raw_payment_type === '1') ? 'BANK' : (((string)$raw_payment_type === '0') ? 'CASH' : strtoupper($raw_payment_type));
+        } else {
+            $payment_type = strtoupper($raw_payment_type);
+        }
+
+        $data = [
+            'receipt_reference' => $payment_reference,
+            'batch' => $first_row->batch,
+            'group_name' => $first_row->group_name,
+            'group_code' => $first_row->group_code,
+            'payment_type' => $payment_type,
+            'posted_on' => $posted_on,
+            'printed_on' => $printed_on,
+            'officer' => $officer,
+            'total_allocated' => $total_allocated,
+            'allocations' => $rows,
+            'internal_refs' => $internal_refs
+        ];
+
+        $this->load->view('loan/print_batch_payment_receipt', $data);
     }
     
     public function get_next_payment_info(){
@@ -2743,8 +3162,8 @@ class Loan extends CI_Controller
             $customer_name = $indi->Firstname.' '.$indi->Lastname;
 
         }
-        $branchname=get_by_id('branches','Code',$row->branch);
-        $bname=$branchname->BranchName;
+        $branchname = get_by_id('branches','id',$row->branch);
+        $bname = $branchname ? $branchname->BranchName : 'N/A';
         $data = array(
             'loan_id' => $row->loan_id,
             'maturity_date' => $maturity_date->payment_schedule,
@@ -2822,7 +3241,7 @@ class Loan extends CI_Controller
                 $customer_name = $indi->Firstname.' '.$indi->Lastname;
             }
 
-            $branchname=get_by_id('branches','Code',$loan->branch);
+            $branchname = get_by_id('branches','id',$loan->branch);
             $bname = $branchname ? $branchname->BranchName : 'N/A';
 
             $loan_obj = (object) array(
@@ -2871,7 +3290,7 @@ class Loan extends CI_Controller
             'group_code' => $batch_group_code,
             'total_loans' => count($loans),
             'total_amount' => array_sum(array_column($batch_data, 'loan_principal')),
-            'branch_name' => !empty($loans) && !empty($loans[0]->branch) ? (get_by_id('branches','Code',$loans[0]->branch) ? get_by_id('branches','Code',$loans[0]->branch)->BranchName : 'N/A') : 'N/A'
+            'branch_name' => !empty($loans) && !empty($loans[0]->branch) ? (get_by_id('branches','id',$loans[0]->branch) ? get_by_id('branches','id',$loans[0]->branch)->BranchName : 'N/A') : 'N/A'
         );
 
         $this->load->library('Pdf');
@@ -3438,7 +3857,7 @@ class Loan extends CI_Controller
         $ch = curl_init();
 
         // Set the URL of the endpoint
-        $url = "http://localhost:4500/generate-report-portfolio-write-off";
+        $url = "http://localhost:4300/generate-report-portfolio-write-off";
 
         // Prepare the data to be sent to the Node.js backend
         $data = [

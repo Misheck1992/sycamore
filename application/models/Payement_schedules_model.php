@@ -9,10 +9,56 @@ class Payement_schedules_model extends CI_Model
     public $table = 'payement_schedules';
     public $id = '';
     public $order = 'DESC';
+    private $transaction_fields = null;
 
     function __construct()
     {
         parent::__construct();
+    }
+
+    private function insert_transaction_compat($transaction)
+    {
+        if ($this->transaction_fields === null) {
+            $this->transaction_fields = $this->db->list_fields('transactions');
+        }
+
+        $fallback_ref = '';
+        if (!empty($transaction['payment_reference'])) {
+            $fallback_ref = (string)$transaction['payment_reference'];
+        } elseif (!empty($transaction['reference'])) {
+            $fallback_ref = (string)$transaction['reference'];
+        } elseif (!empty($transaction['ref'])) {
+            $fallback_ref = (string)$transaction['ref'];
+        } else {
+            $fallback_ref = 'SYS-' . uniqid('', true);
+        }
+
+        if (!isset($transaction['reference']) && in_array('reference', $this->transaction_fields)) {
+            $transaction['reference'] = $fallback_ref;
+        }
+
+        if (!isset($transaction['method']) && in_array('method', $this->transaction_fields)) {
+            $transaction['method'] = 0;
+        }
+
+        if (in_array('payment_reference', $this->transaction_fields)) {
+            if (!isset($transaction['payment_reference']) || trim((string)$transaction['payment_reference']) === '') {
+                $transaction['payment_reference'] = $fallback_ref;
+            }
+        }
+
+        if (!isset($transaction['payment_type']) && in_array('payment_type', $this->transaction_fields)) {
+            $transaction['payment_type'] = 'cash';
+        }
+
+        $filtered = [];
+        foreach ($transaction as $key => $value) {
+            if (in_array($key, $this->transaction_fields)) {
+                $filtered[$key] = $value;
+            }
+        }
+
+        $this->db->insert('transactions', $filtered);
     }
 
     /**
@@ -102,7 +148,7 @@ class Payement_schedules_model extends CI_Model
             'added_by' => $this->session->userdata('user_id'),
             'date_stamp' => $date
         );
-        $this->db->insert('transactions', $transaction);
+        $this->insert_transaction_compat($transaction);
 
         return [
             'success' => true,
@@ -159,7 +205,7 @@ class Payement_schedules_model extends CI_Model
                 'date_stamp'=> $date
 
             );
-            $this->db->insert('transactions',$transaction);
+            $this->insert_transaction_compat($transaction);
             return true;
 
         }
@@ -203,7 +249,7 @@ class Payement_schedules_model extends CI_Model
                         'date_stamp'=> $date
 
                     );
-                    $this->db->insert('transactions',$transaction);
+                    $this->insert_transaction_compat($transaction);
                     return true;
                 }
                 elseif($our_amount==($lr->amount-$lr->paid_amount)){
@@ -231,7 +277,7 @@ class Payement_schedules_model extends CI_Model
                         'date_stamp'=> $date
 
                     );
-                    $this->db->insert('transactions',$transaction);
+                    $this->insert_transaction_compat($transaction);
                     return true;
                 }
                 else{
@@ -260,7 +306,7 @@ class Payement_schedules_model extends CI_Model
                         'date_stamp'=> $date
 
                     );
-                    $this->db->insert('transactions',$transaction);
+                    $this->insert_transaction_compat($transaction);
                 }
 
             }
@@ -297,7 +343,7 @@ class Payement_schedules_model extends CI_Model
                 'date_stamp'=> $date
 
             );
-            $this->db->insert('transactions',$transaction);
+            $this->insert_transaction_compat($transaction);
             return true;
 
         }
@@ -338,7 +384,7 @@ class Payement_schedules_model extends CI_Model
                 'date_stamp'=> $date
 
             );
-            $this->db->insert('transactions',$transaction);
+            $this->insert_transaction_compat($transaction);
             return true;
 
         }
@@ -382,7 +428,7 @@ class Payement_schedules_model extends CI_Model
                         'date_stamp'=> $date
 
                     );
-                    $this->db->insert('transactions',$transaction);
+                    $this->insert_transaction_compat($transaction);
                     return true;
                 }
                 elseif($our_amount==($lr->amount-$lr->paid_amount)){
@@ -410,7 +456,7 @@ class Payement_schedules_model extends CI_Model
                         'date_stamp'=> $date
 
                     );
-                    $this->db->insert('transactions',$transaction);
+                    $this->insert_transaction_compat($transaction);
                     return true;
                 }
                 else{
@@ -439,7 +485,7 @@ class Payement_schedules_model extends CI_Model
                         'date_stamp'=> $date
 
                     );
-                    $this->db->insert('transactions',$transaction);
+                    $this->insert_transaction_compat($transaction);
                 }
 
             }
@@ -476,7 +522,7 @@ class Payement_schedules_model extends CI_Model
                 'date_stamp'=> $date
 
             );
-            $this->db->insert('transactions',$transaction);
+            $this->insert_transaction_compat($transaction);
             return true;
 
         }
@@ -602,7 +648,7 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
                 'date_stamp' => $date
 
             );
-            $this->db->insert('transactions', $transaction);
+            $this->insert_transaction_compat($transaction);
             $pay_number++;
         }
         return $tid;
@@ -642,7 +688,7 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
                 'date_stamp'=> $date
 
             );
-            $this->db->insert('transactions',$transaction);
+            $this->insert_transaction_compat($transaction);
             return true;
 
         }
@@ -686,7 +732,7 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
                         'date_stamp'=> $date
 
                     );
-                    $this->db->insert('transactions',$transaction);
+                    $this->insert_transaction_compat($transaction);
                     return true;
                 }
                 elseif($our_amount==($lr->amount-$lr->paid_amount)){
@@ -714,7 +760,7 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
                         'date_stamp'=> $date
 
                     );
-                    $this->db->insert('transactions',$transaction);
+                    $this->insert_transaction_compat($transaction);
                     return true;
                 }
                 else{
@@ -743,7 +789,7 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
                         'date_stamp'=> $date
 
                     );
-                    $this->db->insert('transactions',$transaction);
+                    $this->insert_transaction_compat($transaction);
                 }
 
             }
@@ -780,7 +826,7 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
                 'date_stamp'=> $date
 
             );
-            $this->db->insert('transactions',$transaction);
+            $this->insert_transaction_compat($transaction);
             return true;
 
         }
@@ -917,7 +963,7 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
                 'added_by' => $this->session->userdata('user_id')
 
             );
-            $this->db->insert('transactions',$transaction);
+            $this->insert_transaction_compat($transaction);
             return true;
 
         }elseif(intval($to_pay) === intval($newbalance)){
@@ -948,7 +994,7 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
                 'added_by' => $this->session->userdata('user_id')
 
             );
-            $this->db->insert('transactions',$transaction);
+            $this->insert_transaction_compat($transaction);
             return true;
 
         }else{
@@ -986,7 +1032,7 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
                 'added_by' => $this->session->userdata('user_id')
 
             );
-            $this->db->insert('transactions',$transaction);
+            $this->insert_transaction_compat($transaction);
             return true;
             
     }
@@ -1064,7 +1110,7 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
                     'added_by' => $this->session->userdata('user_id')
 
                 );
-                $this->db->insert('transactions',$transaction);
+                $this->insert_transaction_compat($transaction);
 
             }else{
 
@@ -1088,7 +1134,7 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
                 'added_by' => $this->session->userdata('user_id')
 
             );
-            $this->db->insert('transactions',$transaction);
+            $this->insert_transaction_compat($transaction);
         }
         else{
             $data = array(
@@ -1109,7 +1155,7 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
                 'added_by' => $this->session->userdata('user_id')
 
             );
-            $this->db->insert('transactions',$transaction);
+            $this->insert_transaction_compat($transaction);
         }
 
 
@@ -1222,7 +1268,7 @@ public function bad_debits($from,$to){
 				'added_by' => $this->session->userdata('user_id')
 
 			);
-			$this->db->insert('transactions',$transaction);
+			$this->insert_transaction_compat($transaction);
 
 
 		}
@@ -1537,4 +1583,8 @@ function  payment_week(){
 		);
 	}
 }
+
+
+
+
 

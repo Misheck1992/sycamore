@@ -126,8 +126,8 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
                         <tr>
                             <td style="text-align: right;padding-right: 10px;">Branch</td>
                             <td><?php
-                                 $branch=get_by_id('branches','Code',$branch);
-                                echo $branch->BranchName;
+                                 $branch = get_by_id('branches','id',$branch);
+                                echo $branch ? $branch->BranchName : 'N/A';
 
                                 ?></td>
                         </tr>

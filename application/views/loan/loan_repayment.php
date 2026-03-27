@@ -53,7 +53,7 @@
                     }
 
 
-                    $branch=get_by_id('branches','Code',$loan->branch);
+					$branch = get_by_id('branches','id',$loan->branch);
 					?>
 					<tr>
 
@@ -70,7 +70,7 @@
 						<td><a href="<?php echo base_url('uploads/').$loan->worthness_file?>" download >Download file <i class="fa fa-download fa-flip"></i></a></td>
 
 						<td><?php echo $loan->loan_status ?></td>
-                        <td><?php echo is_object($branch) ? $branch->BranchName : 'Blantyre'; ?></td>
+						<td><?php echo $branch ? $branch->BranchName : 'N/A'; ?></td>
 						<td><?php echo $loan->loan_added_date ?></td>
 						<td><a href="<?php echo base_url('loan/repayment_view/').$loan->loan_id?>">Pay this loan</a></td>
 

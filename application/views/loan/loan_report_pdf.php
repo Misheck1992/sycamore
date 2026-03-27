@@ -198,7 +198,7 @@ $imgg = 'data:image;base64,'.base64_encode(file_get_contents($linkk))
                     $customer_name = $indi->Firstname.' '.$indi->Lastname;
                     $preview_url = "Individual_customers/view/";
                 }
-                $branch=get_by_id('branches','Code',$loan->branch);
+				$branch = get_by_id('branches','id',$loan->branch);
             ?>
             <tr>
 
@@ -214,7 +214,7 @@ $imgg = 'data:image;base64,'.base64_encode(file_get_contents($linkk))
 					<td><?php echo $loan->efname." ".$loan->elname ?></td>
 					<td>MK<?php echo number_format($loan->loan_amount_total,2) ?></td>
 					<td><?php echo $loan->loan_status ?></td>
-                <td><?php echo is_object($branch) ? $branch->BranchName : 'Blantyre'; ?></td>
+				<td><?php echo $branch ? $branch->BranchName : 'N/A'; ?></td>
 					<td><?php echo $loan->loan_added_date ?></td>
 
 				</tr>

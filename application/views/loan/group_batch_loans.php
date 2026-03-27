@@ -23,6 +23,7 @@
                     $has_recommendable = false; // loans that can be recommended (not already recommended/approved/active)
                     $has_recommended = false;   // loans with RECOMMENDED status
                     $has_approved = false;      // loans with APPROVED status
+                    $has_payable = false;       // loans with ACTIVE status for batch payment
                     
                     foreach($loans as $check_loan) {
                         if(!in_array($check_loan->loan_status, ['RECOMMENDED', 'APPROVED', 'ACTIVE', 'CLOSED', 'DELETED'])) {
@@ -33,6 +34,9 @@
                         }
                         if($check_loan->loan_status == 'APPROVED') {
                             $has_approved = true;
+                        }
+                        if(strtoupper(trim($check_loan->loan_status)) == 'ACTIVE') {
+                            $has_payable = true;
                         }
                     }
                     
@@ -49,6 +53,11 @@
                     <?php if($has_approved && $permissions['can_disburse']): ?>
                     <button class="btn btn-danger mr-2" onclick="disburseBatch('<?php echo $batch; ?>')">
                         <i class="fas fa-money-bill-wave mr-2"></i>Disburse Batch
+                    </button>
+                    <?php endif; ?>
+                    <?php if($has_payable && $permissions['can_pay']): ?>
+                    <button class="btn btn-success mr-2" onclick="openBatchPaymentModal()">
+                        <i class="fas fa-hand-holding-usd mr-2"></i>Pay Batch
                     </button>
                     <?php endif; ?>
                     <a href="<?php echo base_url('loan/batch_report/').$batch; ?>" class="btn btn-success" target="_blank">
@@ -396,7 +405,7 @@
                             <div class="input-group">
                                 <input type="text" class="form-control" name="payment_reference" id="batch_payment_reference"
                                        placeholder="Enter Transaction ID or Receipt Number" required
-                                       oninput="checkPaymentRef(this,'batch_ref_feedback')" autocomplete="off" />
+                                        oninput="checkPaymentRef(this,'batch_ref_feedback')" autocomplete="off" disabled />
                                 <div class="input-group-append">
                                     <span class="input-group-text" id="batch_ref_feedback"></span>
                                 </div>
@@ -466,7 +475,7 @@
                             <div class="input-group">
                                 <input type="text" class="form-control" name="payment_reference" id="batch_payoff_reference"
                                        placeholder="Enter Transaction ID or Receipt Number" required
-                                       oninput="checkPaymentRef(this,'batch_payoff_ref_feedback')" autocomplete="off" />
+                                        oninput="checkPaymentRef(this,'batch_payoff_ref_feedback')" autocomplete="off" disabled />
                                 <div class="input-group-append">
                                     <span class="input-group-text" id="batch_payoff_ref_feedback"></span>
                                 </div>
@@ -479,6 +488,122 @@
                         </div>
                     </div>
                     <button class="btn btn-sm btn-block btn-danger" type="submit" id="submit_batch_payoff">Pay Off Loan</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Group Batch Payment Modal -->
+<div aria-hidden="true" class="onboarding-modal modal fade" id="group_batch_payment_modal" role="dialog" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-centered" role="document">
+        <div class="modal-content text-left">
+            <span></span><button style="float: right;" aria-label="Close" class="close" data-dismiss="modal" type="button"><span class="close-label">Close</span><span class="anticon anticon-close"></span></button>
+            <div class="onboarding-content" style="padding: 1em;">
+                <h4 class="onboarding-title">Pay Batch - <?php echo $batch; ?></h4>
+                <p style="color: #555;">Enter the group's total deposited amount, one shared Transaction ID/Receipt Number, and distribute the amount to members below.</p>
+                <form class="form-row" id="group_batch_payment_form" method="POST" action="<?php echo base_url('loan/batch_pay'); ?>" onsubmit="doSubmitBatchPayment(); return false;">
+                    <input type="hidden" name="batch" value="<?php echo $batch; ?>">
+                    <div class="form-group col-md-4">
+                        <label for="batch-total-amount"><strong>Total Deposited Amount (MWK) <span style="color:red;">*</span></strong></label>
+                        <input type="text" class="form-control" id="batch-total-amount" name="total_amount" placeholder="e.g. 150,000.00" oninput="updateBatchAllocationTotals()" onchange="updateBatchAllocationTotals()" onkeyup="updateBatchAllocationTotals()" required>
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label for="group_batch_payment_type"><strong>Payment Type <span style="color:red;">*</span></strong></label>
+                        <select class="form-control" name="payment_type" id="group_batch_payment_type" required onchange="updateRefLabel('group_batch_payment_type','group_batch_ref_label','group_batch_payment_reference')">
+                            <option value="">-- Select Payment Type --</option>
+                            <option value="bank">Bank Transfer</option>
+                            <option value="cash">Cash</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label for="group_batch_pdate"><strong>Payment Date</strong></label>
+                        <input type="datetime-local" class="form-control" name="pdate" id="group_batch_pdate" />
+                    </div>
+                    <div class="form-group col-md-12 mt-2">
+                        <label id="group_batch_ref_label" for="group_batch_payment_reference"><strong>Reference Number <span style="color:red;">*</span></strong></label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" name="payment_reference" id="group_batch_payment_reference"
+                                   placeholder="Enter Transaction ID or Receipt Number" required
+                                oninput="checkPaymentRef(this,'group_batch_ref_feedback')" autocomplete="off" disabled />
+                            <div class="input-group-append">
+                                <span class="input-group-text" id="group_batch_ref_feedback"></span>
+                            </div>
+                        </div>
+                        <small class="form-text text-muted">Use the same bank Transaction ID or cash Receipt Number for the whole group batch payment.</small>
+                    </div>
+
+                    <div class="col-12 mt-2">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped" id="group-batch-allocation-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Loan #</th>
+                                        <th>Member</th>
+                                        <th>Outstanding (MWK)</th>
+                                        <th>Amount to Pay (MWK)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($loans as $batch_loan): ?>
+                                        <?php if (strtoupper(trim($batch_loan->loan_status)) == 'ACTIVE'): ?>
+                                            <?php
+                                            $this->db->select('SUM(amount - paid_amount) as outstanding');
+                                            $this->db->from('payement_schedules');
+                                            $this->db->where('loan_id', $batch_loan->loan_id);
+                                            $this->db->where('status', 'NOT PAID');
+                                            $batch_outstanding = $this->db->get()->row();
+                                            $member_outstanding = (float)($batch_outstanding && $batch_outstanding->outstanding ? $batch_outstanding->outstanding : 0);
+                                            ?>
+                                            <tr>
+                                                <td><strong><?php echo $batch_loan->loan_number; ?></strong></td>
+                                                <?php
+                                                $display_member_name = !empty($batch_loan->member_name) ? (string)$batch_loan->member_name : trim((string)$batch_loan->Firstname . ' ' . (string)$batch_loan->Lastname);
+                                                if ($display_member_name === '') {
+                                                    $display_member_name = !empty($batch_loan->customer_group_name) ? $batch_loan->customer_group_name : ('Customer #' . $batch_loan->loan_customer);
+                                                }
+                                                ?>
+                                                <td><?php echo $display_member_name; ?></td>
+                                                <td class="text-danger"><strong>MK <?php echo number_format($member_outstanding, 2); ?></strong></td>
+                                                <td>
+                                                    <input
+                                                        type="number"
+                                                        class="form-control batch-member-amount"
+                                                        name="allocations[<?php echo $batch_loan->loan_id; ?>]"
+                                                        step="0.01"
+                                                        min="0"
+                                                        max="<?php echo number_format($member_outstanding, 2, '.', ''); ?>"
+                                                        data-loan-number="<?php echo $batch_loan->loan_number; ?>"
+                                                        data-outstanding="<?php echo number_format($member_outstanding, 2, '.', ''); ?>"
+                                                        oninput="updateBatchAllocationTotals()"
+                                                        onchange="updateBatchAllocationTotals()"
+                                                        onkeyup="updateBatchAllocationTotals()"
+                                                        placeholder="0.00"
+                                                    >
+                                                </td>
+                                            </tr>
+                                        <?php endif; ?>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="col-12 mt-2">
+                        <div id="batch-sum-alert" class="alert alert-danger" style="display:none;"></div>
+                        <div id="batch-debug-alert" class="alert alert-warning" style="display:none;"></div>
+                        <div id="batch-status-alert" class="alert alert-info" style="display:none;"></div>
+                        <div class="alert alert-info mb-2">
+                            <strong>Total Entered for Members:</strong> <span id="batch-allocated-total">MWK 0.00</span>
+                        </div>
+                        <div class="alert alert-secondary mb-0">
+                            Payment will proceed only when the sum of member amounts exactly matches the total deposited amount.
+                        </div>
+                    </div>
+
+                    <div class="col-12 mt-3">
+                        <button class="btn btn-danger btn-block" type="button" id="submit_group_batch_payment" onclick="doSubmitBatchPayment()">Submit Batch Payment</button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -607,6 +732,22 @@
 
 .card-header {
     font-weight: 500;
+}
+
+/* Keep member names readable regardless of theme table stripe overrides */
+#group-batch-allocation-table tbody td {
+    color: #212529 !important;
+    background-color: #ffffff;
+}
+
+#group-batch-allocation-table.table-striped tbody tr:nth-of-type(odd) td {
+    background-color: #f8f9fc;
+    color: #212529 !important;
+}
+
+#group-batch-allocation-table.table-striped tbody tr:nth-of-type(even) td {
+    background-color: #ffffff;
+    color: #212529 !important;
 }
 
 /* Amortization Section Styles */
@@ -763,6 +904,10 @@ function updateRefLabel(selectId, labelId, inputId) {
     var lbl = document.getElementById(labelId);
     var inp = document.getElementById(inputId);
     if (!sel || !lbl || !inp) return;
+
+    var isTypeSelected = (sel.value === 'bank' || sel.value === 'cash');
+    inp.disabled = !isTypeSelected;
+
     if (sel.value === 'bank') {
         lbl.textContent = 'Bank Transaction ID';
         inp.placeholder = 'Enter bank transaction ID from statement';
@@ -772,6 +917,14 @@ function updateRefLabel(selectId, labelId, inputId) {
     } else {
         lbl.textContent = 'Payment Reference';
         inp.placeholder = 'Select payment type first';
+        inp.value = '';
+        inp.style.borderColor = '';
+
+        var feedback = inp.parentElement ? inp.parentElement.querySelector('.input-group-text') : null;
+        if (feedback) {
+            feedback.innerHTML = '';
+            feedback.style.color = '';
+        }
     }
 }
 
@@ -940,4 +1093,210 @@ function payOffLoanBatch(loanId, loanNumber) {
         }
     });
 }
+
+function parseBatchAmount(value) {
+    if (value === null || value === undefined) {
+        return 0;
+    }
+    var normalized = value.toString().replace(/,/g, '').trim();
+    if (normalized === '') {
+        return 0;
+    }
+    var parsed = parseFloat(normalized);
+    return isNaN(parsed) ? 0 : parsed;
+}
+
+function formatBatchMoney(amount) {
+    var num = parseFloat(amount);
+    if (isNaN(num)) {
+        num = 0;
+    }
+    return 'MWK ' + num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+function roundToTwo(num) {
+    var n = parseFloat(num);
+    if (isNaN(n)) {
+        return 0;
+    }
+    return Math.round(n * 100) / 100;
+}
+
+function updateBatchAllocationTotals() {
+    var totalDeposited = parseBatchAmount($('#batch-total-amount').val());
+    var allocated = 0;
+    var hasExceededOutstanding = false;
+    var exceededLoan = '';
+
+    $('.batch-member-amount').each(function() {
+        var currentAmount = parseBatchAmount($(this).val());
+        var outstanding = parseBatchAmount($(this).data('outstanding'));
+        if (currentAmount > outstanding + 0.01) {
+            hasExceededOutstanding = true;
+            exceededLoan = $(this).data('loan-number');
+        }
+        allocated += currentAmount;
+    });
+
+    allocated = roundToTwo(allocated);
+    totalDeposited = roundToTwo(totalDeposited);
+
+    $('#batch-allocated-total').text(formatBatchMoney(allocated));
+
+    var diff = Math.abs(allocated - totalDeposited);
+    var submitButton = $('#submit_group_batch_payment');
+    var alertBox = $('#batch-sum-alert');
+
+    if (hasExceededOutstanding) {
+        alertBox.text('Amount entered for loan ' + exceededLoan + ' exceeds its outstanding balance.').show();
+        submitButton.prop('disabled', true);
+        return;
+    }
+
+    if (totalDeposited <= 0 && allocated > 0) {
+        alertBox.text('Please enter the total deposited amount at the top.').show();
+        submitButton.prop('disabled', true);
+        return;
+    }
+
+    if (allocated > 0 && diff > 0.01) {
+        alertBox.text('Sum mismatch: Total deposited is ' + formatBatchMoney(totalDeposited) + ' but member allocations add up to ' + formatBatchMoney(allocated) + '.').show();
+        submitButton.prop('disabled', true);
+        return;
+    }
+
+    alertBox.hide();
+    submitButton.prop('disabled', false);
+}
+
+function showBatchStatus(message, type) {
+    var box = $('#batch-status-alert');
+    box.removeClass('alert-info alert-success alert-danger alert-warning');
+    box.addClass(type || 'alert-info');
+    box.text(message || '').show();
+}
+
+function doSubmitBatchPayment() {
+    updateBatchAllocationTotals();
+    $('#batch-debug-alert').hide();
+    showBatchStatus('Submitting batch payment...', 'alert-info');
+
+    var submitButton = $('#submit_group_batch_payment');
+    if (submitButton.prop('disabled')) {
+        var reason = $('#batch-sum-alert').is(':visible') ? $('#batch-sum-alert').text() : 'Submission is blocked by validation.';
+        showBatchStatus(reason, 'alert-danger');
+        return;
+    }
+
+    var originalText = submitButton.text();
+    submitButton.prop('disabled', true).text('Processing batch payment...');
+
+    $.ajax({
+        url: '<?php echo base_url("loan/batch_pay"); ?>',
+        type: 'POST',
+        data: $('#group_batch_payment_form').serialize(),
+        dataType: 'text',
+        success: function(rawResponse) {
+            var response = null;
+            try {
+                response = JSON.parse(rawResponse);
+            } catch (parseErr) {
+                $('#batch-debug-alert').text('Raw server response: ' + rawResponse).show();
+                showBatchStatus('Server returned invalid JSON response.', 'alert-danger');
+                submitButton.prop('disabled', false).text(originalText);
+                return;
+            }
+
+            if (response && response.success) {
+                showBatchStatus(response.message || 'Batch payment posted successfully.', 'alert-success');
+                if (response.receipt_url) {
+                    window.open(response.receipt_url, '_blank');
+                }
+                setTimeout(function() {
+                    $('#group_batch_payment_modal').modal('hide');
+                    if (response.redirect_url) {
+                        window.location.href = response.redirect_url;
+                    } else {
+                        window.location.reload();
+                    }
+                }, 700);
+            } else {
+                var msg = (response && response.message) ? response.message : 'Unknown server error.';
+                $('#batch-debug-alert').text('Server response: ' + msg).show();
+                showBatchStatus(msg, 'alert-danger');
+                submitButton.prop('disabled', false).text(originalText);
+            }
+        },
+        error: function(xhr) {
+            var details = 'Failed to post batch payment. Please try again.';
+            if (xhr && xhr.responseText) {
+                details += ' Server says: ' + xhr.responseText;
+                $('#batch-debug-alert').text(details).show();
+            }
+            showBatchStatus(details, 'alert-danger');
+            submitButton.prop('disabled', false).text(originalText);
+        }
+    });
+}
+
+function openBatchPaymentModal() {
+    var now = new Date();
+    var localNow = now.getFullYear() + '-' +
+        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0') + 'T' +
+        String(now.getHours()).padStart(2, '0') + ':' +
+        String(now.getMinutes()).padStart(2, '0');
+
+    $('#group_batch_payment_form')[0].reset();
+    $('#group_batch_pdate').val(localNow);
+    $('#group_batch_ref_feedback').html('');
+    $('#group_batch_payment_reference').css('border-color', '');
+    $('#group_batch_payment_type').val('');
+    updateRefLabel('group_batch_payment_type','group_batch_ref_label','group_batch_payment_reference');
+    $('#batch-debug-alert').hide();
+    $('#batch-status-alert').hide();
+    updateBatchAllocationTotals();
+    $('#group_batch_payment_modal').modal('show');
+}
+
+var batchCalcInterval = null;
+
+$(document).ready(function() {
+    updateRefLabel('batch_payment_type','batch_ref_label','batch_payment_reference');
+    updateRefLabel('batch_payoff_type','batch_payoff_ref_label','batch_payoff_reference');
+    updateRefLabel('group_batch_payment_type','group_batch_ref_label','group_batch_payment_reference');
+
+    $('#batch-total-amount').on('input keyup change blur', function() {
+        var clean = this.value.replace(/[^\d.,]/g, '');
+        this.value = clean;
+        updateBatchAllocationTotals();
+    });
+
+    $(document).on('input keyup change blur', '.batch-member-amount', function() {
+        updateBatchAllocationTotals();
+    });
+
+    // Prevent any accidental native form submission
+    $('#group_batch_payment_form').on('submit', function(e) {
+        e.preventDefault();
+        doSubmitBatchPayment();
+    });
+
+    $('#group_batch_payment_modal').on('shown.bs.modal', function() {
+        updateBatchAllocationTotals();
+        if (batchCalcInterval) {
+            clearInterval(batchCalcInterval);
+        }
+        batchCalcInterval = setInterval(function() {
+            updateBatchAllocationTotals();
+        }, 700);
+    });
+
+    $('#group_batch_payment_modal').on('hidden.bs.modal', function() {
+        if (batchCalcInterval) {
+            clearInterval(batchCalcInterval);
+            batchCalcInterval = null;
+        }
+    });
+});
 </script>
