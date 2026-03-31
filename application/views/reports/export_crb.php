@@ -3,7 +3,7 @@ public function export_crb($format = 'xlsx') {
     $ch = curl_init();
 
     // Set the URL of the endpoint
-    $url = "http://localhost:4300/generate-report-crb";
+    $url = "http://localhost:4500/generate-report-crb";
 
     // Prepare the data to be sent
     $data = [

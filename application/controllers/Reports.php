@@ -91,8 +91,8 @@ public function summary(){
         $ch = curl_init();
 
         // Set the URL of the endpoint
-      //  $url = "http://localhost:4300/generate-report-par-v2"; old url
-        $url = "http://localhost:4300/generate-report-par-principal-balance";
+    //  $url = "http://localhost:4500/generate-report-par-v2"; old url
+        $url = "http://localhost:4500/generate-report-par-principal-balance";
 
         // Prepare the data to be sent
         $data = [
@@ -147,7 +147,7 @@ public function summary(){
         $ch = curl_init();
 
         // Set the URL of the endpoint
-        $url = "http://localhost:4300/generate-report-par-v2";
+        $url = "http://localhost:4500/generate-report-par-v2";
 
         // Prepare the data to be sent
         $data = [
@@ -197,7 +197,7 @@ public function summary(){
         $ch = curl_init();
 
 // Set the URL of the endpoint
-        $url = "http://localhost:4300/generate-report-crb";
+        $url = "http://localhost:4500/generate-report-crb";
 
 // Prepare the data to be sent
         $data = [
@@ -562,7 +562,7 @@ public function payments_filter() {
         $ch = curl_init();
 
         // Set the URL of the Node.js endpoint
-        $url = "http://localhost:4300/generate-report-transactions";
+        $url = "http://localhost:4500/generate-report-transactions";
 
         // Prepare the data to be sent
         $data = [
@@ -647,7 +647,7 @@ public function payments_filter() {
         $ch = curl_init();
 
         // Set the URL of the Node.js endpoint
-        $url = "http://localhost:4300/generate-report-rbm-classification";
+        $url = "http://localhost:4500/generate-report-rbm-classification";
 
         // Prepare the data to be sent
         $data = [

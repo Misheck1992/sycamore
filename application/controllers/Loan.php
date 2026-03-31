@@ -3857,7 +3857,7 @@ class Loan extends CI_Controller
         $ch = curl_init();
 
         // Set the URL of the endpoint
-        $url = "http://localhost:4300/generate-report-portfolio-write-off";
+        $url = "http://localhost:4500/generate-report-portfolio-write-off";
 
         // Prepare the data to be sent to the Node.js backend
         $data = [

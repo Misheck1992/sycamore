@@ -57,7 +57,7 @@ const {
 } = require('./databaseHelpers');
 
 const app = express();
-const port = process.env.PORT || 4300;
+const port = process.env.PORT || 4500;
 
 // Database connection is now handled by databaseHelpers.js
 // Helper function to maintain callback compatibility
