@@ -1,9 +1,19 @@
 <?php
+if (!function_exists('ensure_db_loaded')) {
+    function ensure_db_loaded()
+    {
+        $ci =& get_instance();
+        if (!isset($ci->db) || !is_object($ci->db)) {
+            $ci->load->database();
+        }
+        return $ci;
+    }
+}
+
 function get_all($id){
 
 
-    $ci =& get_instance();
-    $ci->load->database();
+    $ci = ensure_db_loaded();
 //	$ci->load->model('Dbc_users_model');
 
     $sql="SELECT * FROM $id ";
@@ -43,8 +53,7 @@ function get_loan_cycle($loan_id, $customer_id, $customer_type) {
 }
 
 function get_unpaid_principal_balance($loan_id){
-    $ci =& get_instance();
-    $ci->load->database();
+    $ci = ensure_db_loaded();
     
     $sql="SELECT SUM(principal) AS total_principal
         FROM payement_schedules
@@ -54,8 +63,7 @@ function get_unpaid_principal_balance($loan_id){
 }
 
 function get_oldest_unpaid_schedule($loan_id){
-    $ci =& get_instance();
-    $ci->load->database();
+    $ci = ensure_db_loaded();
     
     $sql="SELECT payment_schedule
         FROM payement_schedules

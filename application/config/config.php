@@ -28,6 +28,17 @@ $config['base_url'] = 'http://localhost/sycamore/';
 
 /*
 |--------------------------------------------------------------------------
+| Report Service Base URL
+|--------------------------------------------------------------------------
+|
+| Base URL for the Node report service used by report controllers.
+| Set REPORT_SERVICE_BASE_URL in the environment to override this value.
+|
+*/
+$config['report_service_base_url'] = getenv('REPORT_SERVICE_BASE_URL') ?: 'http://localhost:4300';
+
+/*
+|--------------------------------------------------------------------------
 | Index File
 |--------------------------------------------------------------------------
 |

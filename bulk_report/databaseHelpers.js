@@ -2,10 +2,15 @@ const mysql = require('mysql2');
 
 // Create MySQL connection pool
 const pool = mysql.createPool({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'sycamore'
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'financerealm_sycamore_demo',
+    waitForConnections: true,
+    connectionLimit: parseInt(process.env.DB_POOL_LIMIT || '15', 10),
+    queueLimit: parseInt(process.env.DB_POOL_QUEUE_LIMIT || '0', 10),
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000
 });
 
 // Helper function to execute queries
@@ -61,6 +66,33 @@ const getDaysOfArrears = async (loanID) => {
 
     const results = await query(sql, [loanID]);
     return results[0]?.days_in_arrears || 0 ; // Since you're expecting a single row
+};
+
+const getNumberOfArrears = async (loanID) => {
+    const sql = `
+        SELECT COUNT(*) AS num_arrears
+        FROM payement_schedules
+        WHERE loan_id = ?
+          AND payment_schedule < CURDATE()
+          AND status = 'NOT PAID'
+    `;
+
+    const results = await query(sql, [loanID]);
+    return results[0]?.num_arrears || 0;
+};
+
+const getLastPaidPaymentByLoanId = async (loanID) => {
+    const sql = `
+        SELECT *
+        FROM payement_schedules
+        WHERE loan_id = ?
+          AND (status = 'PAID' OR paid_amount > 0)
+                ORDER BY COALESCE(paid_date, payment_schedule) DESC, id DESC
+        LIMIT 1
+    `;
+
+    const results = await query(sql, [loanID]);
+    return results[0] || null;
 };
 
 // Function to get loan details
@@ -256,6 +288,31 @@ const getById = async (table, key, value) => {
     return results;
 };
 
+const findBranch = async (branchReference) => {
+    if (branchReference === null || branchReference === undefined || branchReference === '') {
+        return null;
+    }
+
+    const normalizedReference = String(branchReference).trim();
+    const numericReference = Number(normalizedReference);
+    const sql = `
+        SELECT *
+        FROM branches
+        WHERE id = ?
+           OR Code = ?
+           OR BranchCode = ?
+        LIMIT 1
+    `;
+
+    const results = await query(sql, [
+        Number.isFinite(numericReference) ? numericReference : -1,
+        normalizedReference,
+        Number.isFinite(numericReference) ? numericReference : -1,
+    ]);
+
+    return results[0] || null;
+};
+
 
 // Function to get previous loan
 const getPreviousLoan = async (customerID, callback) => {
@@ -308,6 +365,8 @@ module.exports = {
     query, // Export the query function for other files to use
     getAmountOfArrears,
     getAmountOfArrearsPaid,
+    getNumberOfArrears,
+    getLastPaidPaymentByLoanId,
     getLoanDetails,
     getUserProfile,
     getLoanRepayments,
@@ -317,6 +376,7 @@ module.exports = {
     getAllById,
     loanCollection,
     getById,
+    findBranch,
     getPreviousLoan,
     getRBMLoanPaymentById,
     getDaysOfArrears,

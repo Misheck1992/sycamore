@@ -151,6 +151,56 @@ class Report extends CI_Controller
         }
     }
 
+    public function download($id)
+    {
+        $row = $this->Reports_model->get_by_id($id);
+
+        if (!$row || empty($row->download_link)) {
+            $this->toaster->error('Download link was not found for this report.');
+            redirect(site_url('report'));
+            return;
+        }
+
+        $rawLink = trim(str_replace('\\', '/', $row->download_link));
+        $resolvedPath = null;
+
+        $candidates = array();
+
+        // Handle absolute paths previously saved in the database.
+        if (preg_match('/^[A-Za-z]:\//', $rawLink) === 1 || strpos($rawLink, '/') === 0) {
+            $candidates[] = $row->download_link;
+            $candidates[] = str_replace('/', DIRECTORY_SEPARATOR, $rawLink);
+        }
+
+        $relativeLink = preg_replace('#^/?bulk_report/#', '', $rawLink);
+        $relativeLink = ltrim($relativeLink, '/');
+
+        if (strpos($relativeLink, '..') === false && $relativeLink !== '') {
+            $candidates[] = FCPATH . 'bulk_report/' . str_replace('/', DIRECTORY_SEPARATOR, $relativeLink);
+        }
+
+        $fileNameOnly = basename($rawLink);
+        if ($fileNameOnly !== '') {
+            $candidates[] = FCPATH . 'bulk_report/reports/' . $fileNameOnly;
+        }
+
+        foreach ($candidates as $candidate) {
+            if (!empty($candidate) && is_file($candidate)) {
+                $resolvedPath = $candidate;
+                break;
+            }
+        }
+
+        if (!$resolvedPath) {
+            $this->toaster->error('Report file was not found on server. Please regenerate the report.');
+            redirect(site_url('report'));
+            return;
+        }
+
+        $this->load->helper('download');
+        force_download(basename($resolvedPath), file_get_contents($resolvedPath));
+    }
+
     public function _rules()
     {
         $this->form_validation->set_rules('completed_time', 'completed time', 'trim|required');

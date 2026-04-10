@@ -50,7 +50,7 @@
                     <td><?php
                         if(!empty($reports->download_link)){
                             ?>
-                            <a target="_blank" href="<?php echo base_url('/bulk_report/').$reports->download_link ?>">Preview/export</a>
+                            <a href="<?php echo base_url('report/download/'.$reports->id) ?>">Download</a>
                         <?php
                         }
 

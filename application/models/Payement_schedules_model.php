@@ -158,6 +158,91 @@ class Payement_schedules_model extends CI_Model
         ];
     }
 
+    /**
+     * Apply a standard repayment starting from a given schedule number.
+     * Allocates sequentially, updates statuses consistently, and logs each allocation.
+     */
+    private function process_standard_payment($loan_number, $pay_number, $amount, $date, $tid)
+    {
+        $loan_number = (int)$loan_number;
+        $pay_number = (int)$pay_number;
+        $remaining = (float)$amount;
+
+        if ($loan_number <= 0 || $pay_number <= 0 || $remaining <= 0) {
+            return false;
+        }
+
+        $schedules = $this->db->select('*')
+            ->from($this->table)
+            ->where('loan_id', $loan_number)
+            ->where('payment_number >=', $pay_number)
+            ->where_in('status', array('NOT PAID', 'PARTIAL PAID'))
+            ->order_by('payment_number', 'ASC')
+            ->get()
+            ->result();
+
+        if (empty($schedules)) {
+            return false;
+        }
+
+        $applied = 0.0;
+        foreach ($schedules as $schedule) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $already_paid = (float)$schedule->paid_amount;
+            $schedule_amount = (float)$schedule->amount;
+            $due = $schedule_amount - $already_paid;
+
+            if ($due <= 0) {
+                continue;
+            }
+
+            $pay_now = min($remaining, $due);
+            $new_paid = $already_paid + $pay_now;
+            $is_fully_paid = ($new_paid + 0.0001) >= $schedule_amount;
+
+            $update_data = array(
+                'paid_amount' => $new_paid,
+                'paid_date' => $date,
+                'partial_paid' => $is_fully_paid ? 'NO' : 'YES',
+                'status' => $is_fully_paid ? 'PAID' : 'PARTIAL PAID',
+            );
+
+            $this->db->where('loan_id', $loan_number)
+                ->where('payment_number', (int)$schedule->payment_number)
+                ->update($this->table, $update_data);
+
+            if ($is_fully_paid) {
+                $this->db->where('loan_id', $loan_number)
+                    ->update('loan', array('next_payment_id' => ((int)$schedule->payment_number) + 1));
+
+                if ($this->_should_close_loan($loan_number, (int)$schedule->payment_number)) {
+                    $this->db->where('loan_id', $loan_number)
+                        ->update('loan', array('loan_status' => 'CLOSED'));
+                }
+            }
+
+            $transaction = array(
+                'ref' => $tid,
+                'loan_id' => $loan_number,
+                'amount' => $pay_now,
+                'payment_number' => (int)$schedule->payment_number,
+                'transaction_type' => 3,
+                'payment_proof' => 'null',
+                'added_by' => $this->session->userdata('user_id'),
+                'date_stamp' => $date,
+            );
+            $this->insert_transaction_compat($transaction);
+
+            $remaining -= $pay_now;
+            $applied += $pay_now;
+        }
+
+        return $applied > 0;
+    }
+
     // get all
     function get_all()
     {
@@ -173,6 +258,8 @@ class Payement_schedules_model extends CI_Model
 		return $this->db->get($this->table)->result();
 	}
     public function new_pay_new($loan_number,$pay_number,$amount, $date, $tid){
+        return $this->process_standard_payment($loan_number, $pay_number, $amount, $date, $tid);
+
         $this->db->select("*")->from($this->table);
         $this->db->where('loan_id', $loan_number);
         $this->db->where('payment_number', $pay_number);
@@ -352,6 +439,8 @@ class Payement_schedules_model extends CI_Model
         }
     }
     public function pay_off($loan_number,$pay_number,$amount, $date, $tid){
+        return $this->process_standard_payment($loan_number, $pay_number, $amount, $date, $tid);
+
         $this->db->select("*")->from($this->table);
         $this->db->where('loan_id', $loan_number);
         $this->db->where('payment_number', $pay_number);
@@ -586,6 +675,9 @@ class Payement_schedules_model extends CI_Model
     function out_pay($loan_number, $pay_number, $amount, $date)
     {
 $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
+        $this->process_standard_payment($loan_number, $pay_number, $amount, $date, $tid);
+        return $tid;
+
         // Get all loans
         $this->db->select("*")
             ->from($this->table)
@@ -656,6 +748,9 @@ $tid = "ST." . date('Y') . date('m') . date('d') . '.' . rand(100, 999);
 
 
     public function new_pay($loan_number,$pay_number,$amount, $date){
+        $tid = "GF.".date('Y').date('m').date('d').'.'.rand(100,999);
+        return $this->process_standard_payment($loan_number, $pay_number, $amount, $date, $tid);
+
         $this->db->select("*")->from($this->table);
         $this->db->where('loan_id', $loan_number);
         $this->db->where('payment_number', $pay_number);

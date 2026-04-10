@@ -70,8 +70,8 @@ class Collections_report extends CI_Controller {
         // Initialize cURL session
         $ch = curl_init();
 
-        // Set the URL of the endpoint
-        $url = "http://localhost:4500/generate-report-collections";
+        // Set the URL of the endpoint through the shared helper
+        $url = report_service_url('generate-report-collections');
 
         // Prepare the data to be sent
         $data = [

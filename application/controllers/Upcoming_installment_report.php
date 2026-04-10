@@ -41,8 +41,8 @@ class Upcoming_installment_report extends CI_Controller {
         // Initialize cURL session
         $ch = curl_init();
 
-        // Set the URL of the endpoint
-        $url = "http://localhost:4500/generate-report-upcoming-installment";
+        // Set the URL of the endpoint through the shared helper
+        $url = report_service_url('generate-report-upcoming-installment');
 
         // Prepare the data to be sent
         $data = [

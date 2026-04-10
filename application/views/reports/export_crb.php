@@ -2,8 +2,8 @@ public function export_crb($format = 'xlsx') {
     // Initialize cURL session
     $ch = curl_init();
 
-    // Set the URL of the endpoint
-    $url = "http://localhost:4500/generate-report-crb";
+    // Set the URL of the endpoint through the shared helper
+    $url = report_service_url('generate-report-crb');
 
     // Prepare the data to be sent
     $data = [

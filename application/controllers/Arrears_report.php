@@ -54,8 +54,8 @@ class Arrears_report extends CI_Controller {
         // Initialize cURL session
         $ch = curl_init();
 
-        // Set the URL of the Node.js endpoint
-        $url = "http://localhost:4500/generate-report-arrears";
+        // Set the URL of the Node.js endpoint through the shared helper
+        $url = report_service_url('generate-report-arrears');
 
         // Prepare the data to be sent
         $data = [

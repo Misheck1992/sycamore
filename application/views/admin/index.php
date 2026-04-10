@@ -76,7 +76,7 @@
                                 foreach($recent_reports as $report) {
                                     $badge_class = ($report->status == 'completed') ? 'badge-success' : 'badge-warning';
                                     $download_btn = ($report->download_link && $report->status == 'completed') ?
-                                        '<a href="'.base_url('bulk_report/'.$report->download_link).'" class="btn btn-sm btn-primary"><i class="anticon anticon-download"></i></a>' :
+                                        '<a href="'.base_url('report/download/'.$report->id).'" class="btn btn-sm btn-primary"><i class="anticon anticon-download"></i></a>' :
                                         '<button disabled class="btn btn-sm btn-default"><i class="anticon anticon-download"></i></button>';
 
                                     echo '<tr>

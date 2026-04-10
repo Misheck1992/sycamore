@@ -517,11 +517,13 @@ class Loan extends CI_Controller
     private function get_user_batch_permissions() {
         // Get user's accessible menu items from session
         $user_access = $this->session->userdata('access');
+        $role_name = strtoupper(trim((string)$this->session->userdata('RoleName')));
+        $is_cashier_role = (strpos($role_name, 'CASHIER') !== false);
         
         if(empty($user_access)) {
             return array(
                 'can_pay_off' => false,
-                'can_pay' => false,
+                'can_pay' => $is_cashier_role,
                 'can_disburse' => false,
                 'can_recommend' => false,
                 'can_approve' => false
@@ -537,7 +539,7 @@ class Loan extends CI_Controller
         if(empty($accessible_ids)) {
             return array(
                 'can_pay_off' => false,
-                'can_pay' => false,
+                'can_pay' => $is_cashier_role,
                 'can_disburse' => false,
                 'can_recommend' => false,
                 'can_approve' => false
@@ -566,7 +568,7 @@ class Loan extends CI_Controller
         // Return permission flags
         return array(
             'can_pay_off' => in_array('group_loan.pay_off', $methods),
-            'can_pay' => in_array('group_loan.pay', $methods),
+            'can_pay' => in_array('group_loan.pay', $methods) || $is_cashier_role,
             'can_disburse' => in_array('group_loan.disburse', $methods),
             'can_recommend' => in_array('group_loan.recommend', $methods),
             'can_approve' => in_array('group_loan.approve', $methods)
@@ -1780,7 +1782,8 @@ class Loan extends CI_Controller
         $row = get_by_id('approval_edits','approval_edits_id',$this->session->userdata('loan_data'));
         $data_new = json_decode($row->new_info);
 
-        $this->Loan_model->add_loan_edit($row->id,$data_new->loan_principal, $data_new->loan_period, $data_new->sy_loan_product, $data_new->loan_date,$data_new->sy_loan_customer,$data_new->customer_type,$data_new->loan_worthness_file,$data_new->narration,$data_new->sy_added_by);
+        $selected_period_type = isset($data_new->period_type) ? $data_new->period_type : null;
+        $this->Loan_model->add_loan_edit($row->id,$data_new->loan_principal, $data_new->loan_period, $data_new->sy_loan_product, $data_new->loan_date,$data_new->sy_loan_customer,$data_new->customer_type,$data_new->loan_worthness_file,$data_new->narration,$data_new->sy_added_by, $selected_period_type);
         $this->toaster->success('Success, loan edit was authorised  pending authorisation');
         redirect('loan/track');
 
@@ -2923,6 +2926,7 @@ class Loan extends CI_Controller
             'loan_number'=> $loan_number,
             'sy_loan_product'=>$this->input->post('loan_type'),
             'loan_product'=>$product_n->product_name,
+            'period_type' => $this->input->post('period_type') ? $this->input->post('period_type') : $row->period_type,
             'sy_loan_customer'=>$this->input->post('customer'),
             'loan_customer'=>$customer_name1,
             'customer_type'=> $this->input->post('customer_type'),
@@ -3789,8 +3793,8 @@ class Loan extends CI_Controller
         // Initialize cURL session
         $ch = curl_init();
 
-        // Set the URL of the endpoint
-        $url = "http://localhost:4500/generate-report-portfolio";
+        // Set the URL of the endpoint through the shared helper
+        $url = report_service_url('generate-report-portfolio');
 
         // Prepare the data to be sent to the Node.js backend
         $data = [
@@ -3856,8 +3860,8 @@ class Loan extends CI_Controller
         // Initialize cURL session
         $ch = curl_init();
 
-        // Set the URL of the endpoint
-        $url = "http://localhost:4500/generate-report-portfolio-write-off";
+        // Set the URL of the endpoint through the shared helper
+        $url = report_service_url('generate-report-portfolio-write-off');
 
         // Prepare the data to be sent to the Node.js backend
         $data = [

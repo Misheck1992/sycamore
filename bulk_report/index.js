@@ -37,6 +37,8 @@ const {
 const {
   getAmountOfArrears,
   getAmountOfArrearsPaid,
+    getNumberOfArrears,
+    getLastPaidPaymentByLoanId,
   getDaysOfArrears,
   getLoanDetails,
   getUserProfile,
@@ -47,6 +49,7 @@ const {
   getAllById,
   loanCollection,
   getById,
+    findBranch,
   getPreviousLoan,
   getRBMLoanPaymentById,
     getPARsummary,
@@ -57,7 +60,7 @@ const {
 } = require('./databaseHelpers');
 
 const app = express();
-const port = process.env.PORT || 4500;
+const port = Number(process.env.REPORT_PORT || 4300);
 
 // Database connection is now handled by databaseHelpers.js
 // Helper function to maintain callback compatibility
@@ -1247,6 +1250,40 @@ function exportData(type){
                     
                     let count = 1;
                     let processedCount = 0;
+
+                    const normalizeText = (value) => {
+                        if (value === null || value === undefined) {
+                            return '';
+                        }
+
+                        return String(value)
+                            .replace(/<[^>]*>/g, ' ')
+                            .replace(/&nbsp;/gi, ' ')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                    };
+
+                    const buildJoinedValue = (...values) => values
+                        .map(normalizeText)
+                        .filter(Boolean)
+                        .join(', ');
+
+                    const formatCurrency = (value) => {
+                        const numericValue = Number(value || 0);
+                        return Number.isFinite(numericValue) ? numericValue.toFixed(2) : '0.00';
+                    };
+
+                    const getBranchDisplayValue = (branch) => {
+                        if (!branch) {
+                            return '';
+                        }
+
+                        const branchCode = normalizeText(branch.BranchCode || branch.Code);
+                        const branchName = normalizeText(branch.BranchName);
+
+                        return buildJoinedValue(branchCode, branchName);
+                    };
+
                     for (const record of results) {
                       // console.log('Processing loan'+count, record.loan_id);
                         processedCount += 1;
@@ -1261,22 +1298,24 @@ function exportData(type){
                         console.log('remaingng', remainingPercentage);
                       let group_name = "";
                       let group_code = "";
-                        let payments =await  getAllById('payement_schedules','loan_id', record.loan_id);
                         let total_payments = await  loanCollection(record.loan_id);
-                        // let custbranch = getById('branches','Code', record.Branch );
                         let previousloan = await getPreviousLoan(record.loan_customer);
-                        let pay_balance = (record.loan_amount_total-total_payments[0].total);
+                        const totalPaymentsToDate = Number(total_payments?.[0]?.total || 0);
+                        let pay_balance = Math.max(Number(record.loan_amount_total || 0) - totalPaymentsToDate, 0);
                         let paymentslast= await getRBMLoanPaymentById(record.loan_id,record.loan_period);
+                        let firstPayment = await getRBMLoanPaymentById(record.loan_id,1);
+                        let lastPaidPayment = await getLastPaidPaymentByLoanId(record.loan_id);
                         let arreasamount= await getAmountOfArrears(record.loan_id);
                         let arreasamount_paid= await getAmountOfArrearsPaid(record.loan_id);
+                        let numberOfArrears = await getNumberOfArrears(record.loan_id);
                         let days_in_arrears= await getDaysOfArrears(record.loan_id);
-                        let final_arrears_amount = arreasamount - arreasamount_paid
-                        let datewithoutD = "";
+                        let final_arrears_amount = Math.max(Number(arreasamount || 0) - Number(arreasamount_paid || 0), 0);
+                        let maturityDate = "";
                         let product =await getById('loan_products','loan_product_id', record.loan_product );
                         
                         // Get customer details to fetch branch
                         let customer = null;
-                        let branchName = '';
+                        let branchRecord = null;
                         if( record.customer_type==="group")
                           {
                           let custgroup =await getById('groups','group_id', record.loan_customer );
@@ -1285,40 +1324,44 @@ function exportData(type){
                           group_name = custgroup[0].group_name
                           group_code = custgroup[0].group_code
 
-                          // Get branch for group customers (groups.Branch references branches.id)
-                          if (custgroup && custgroup.length > 0 && custgroup[0].Branch) {
-                              let branch = await getById('branches','id', custgroup[0].Branch);
-                              if (branch && branch.length > 0) {
-                                  branchName = capitalizeFirstLetter(branch[0].BranchName);
-                              }
+                          if (custgroup && custgroup.length > 0) {
+                              branchRecord = await findBranch(custgroup[0].Branch || custgroup[0].branch || record.branch);
                           }
                           }
                         else {
                             // For individual customers, get their branch
                             customer = await getById('individual_customers','id', record.loan_customer);
-                            if (customer && customer.length > 0 && customer[0].Branch) {
-                                let branch = await getById('branches','BranchCode', customer[0].Branch);
-                                if (branch && branch.length > 0) {
-                                    branchName = capitalizeFirstLetter(branch[0].BranchName);
-                                }
+                            if (customer && customer.length > 0) {
+                                branchRecord = await findBranch(customer[0].Branch || record.branch);
                             }
                         }
                           if (paymentslast) {
-                            // Remove dashes from the date string
                             const dateWithoutDashes = formatDate(paymentslast.payment_schedule);
                             
                             if (dateWithoutDashes) {
-                                // Output the date in the desired format (YYYYMMDD)
-                                datewithoutD = dateWithoutDashes
-                            } else {
-                                // Handle invalid date format
-                                
-                                datewithoutD = "Invalid date format";
+                                maturityDate = dateWithoutDashes;
                             }
                         }
 
                    let dob = formatDate(record.DateOfBirth);
                     let disburse_date = formatDate(record.disbursed_date);
+                    let firstPaymentDate = formatDate(firstPayment ? firstPayment.payment_schedule : null);
+                    let lastPaymentDate = formatDate(lastPaidPayment ? (lastPaidPayment.paid_date || lastPaidPayment.payment_schedule) : null);
+                    const accountStatusChangeDate = lastPaymentDate || disburse_date || maturityDate;
+                    const closureDate = lastPaymentDate || maturityDate || disburse_date;
+                    const residentialAddress = buildJoinedValue(
+                        record.AddressLine1,
+                        record.AddressLine2,
+                        record.Village,
+                        record.Province,
+                        record.City
+                    );
+                    const residentialDistrict = normalizeText(record.City || record.Province);
+                    const plotNumber = normalizeText(record.AddressLine3 || record.AddressLine2);
+                    const postalAddress = buildJoinedValue(record.AddressLine1, record.AddressLine2);
+                    const residentPermitNumber = normalizeText(record.AddressLine2);
+                    const branchDisplay = getBranchDisplayValue(branchRecord);
+                    const loanStatus = normalizeText(record.loan_status).toUpperCase();
                     
                     // Helper function to capitalize first letter
                     function capitalizeFirstLetter(str) {
@@ -1369,11 +1412,11 @@ function exportData(type){
                     
                     // Map Reserve Bank Classification based on days in arrears
                     let reserveBankClassification = '';
-                    if (days_in_arrears >= 0 && days_in_arrears <= 30) {
+                    if (Number(days_in_arrears) >= 0 && Number(days_in_arrears) <= 30) {
                         reserveBankClassification = 'STAGE 1';
-                    } else if (days_in_arrears >= 31 && days_in_arrears <= 90) {
+                    } else if (Number(days_in_arrears) >= 31 && Number(days_in_arrears) <= 90) {
                         reserveBankClassification = 'STAGE 2';
-                    } else if (days_in_arrears > 90) {
+                    } else if (Number(days_in_arrears) > 90) {
                         reserveBankClassification = 'STAGE 3';
                     } else {
                         reserveBankClassification = 'STAGE 1'; // default for new disbursements or no arrears data
@@ -1381,11 +1424,16 @@ function exportData(type){
                     
                     // Map Account Status based on Reserve Bank Classification
                     let accountStatus = '';
-                    if (reserveBankClassification === 'STAGE 3') {
+                    if (loanStatus === 'CLOSED' || loanStatus === 'DELETED' || pay_balance <= 0) {
+                        accountStatus = '001';
+                    } else if (loanStatus === 'WRITTEN_OFF' || loanStatus === 'DEFAULTED' || reserveBankClassification === 'STAGE 3') {
                         accountStatus = '002';
                     } else {
                         accountStatus = '003';
                     }
+
+                    const payoffTermination = accountStatus === '001' ? 'PAID OFF' : '';
+                    const availableCredit = 0;
                     
 table+=`
 
@@ -1399,29 +1447,29 @@ table+=`
 
 
                             <td>  ${record.Title ? record.Title.toUpperCase() : ''} </td>
-                            <td>  ${record.Lastname}  </td>
-                            <td> ${record.Firstname}  </td>
-                            <td>  ${record.Middlename} </td>
+                            <td>  ${normalizeText(record.Lastname)}  </td>
+                            <td> ${normalizeText(record.Firstname)}  </td>
+                            <td>  ${normalizeText(record.Middlename)} </td>
                             <td></td>
                             <td>${record.Gender ? record.Gender.toUpperCase() : ''} </td>
                             <td>${record.Marital_status ? record.Marital_status.toUpperCase() : 'UNMARRIED'} </td>
                             <td></td>
                             <td> ${dob} </td>
-                            <td> ${record.IDNumber}  </td>
+                            <td> ${normalizeText(record.IDNumber)}  </td>
                             <td>   ${mappedIDType} </td>
-                            <td>  ${record.IDNumber} </td>
+                            <td>  ${normalizeText(record.IDNumber)} </td>
                             <td>Malawi</td>
-                            <td>  ${capitalizeFirstLetter(record.Village)} </td>
-                            <td>  ${capitalizeFirstLetter(record.Province)}</td>
-                            <td>  ${capitalizeFirstLetter(record.City)}</td>
-                            <td>${capitalizeFirstLetter(record.AddressLine2)}   </td>
-                            <td> ${record.PhoneNumber}  </td>
-                            <td> ${record.AddressLine1}  </td>
-                            <td>  ${record.EmailAddress} </td>
-                            <td> ${branchName}  </td>
-                            <td> ${record.AddressLine2} </td>
-                            <td> ${record.AddressLine3}  </td>
-                            <td> ${record.Profession}  </td>
+                            <td>  ${capitalizeFirstLetter(normalizeText(record.Village))} </td>
+                            <td>  ${capitalizeFirstLetter(normalizeText(record.Province))}</td>
+                            <td>  ${capitalizeFirstLetter(normalizeText(record.City))}</td>
+                            <td>${residentPermitNumber}   </td>
+                            <td> ${normalizeText(record.PhoneNumber)}  </td>
+                            <td> ${postalAddress}  </td>
+                            <td>  ${normalizeText(record.EmailAddress)} </td>
+                            <td> ${residentialAddress}  </td>
+                            <td> ${residentialDistrict} </td>
+                            <td> ${plotNumber}  </td>
+                            <td> ${normalizeText(record.Profession)}  </td>
                             <td></td>
                             <td></td>
                             <td></td>
@@ -1430,7 +1478,7 @@ table+=`
 
 
 
-                        <td> </td>
+                        <td> ${branchDisplay}</td>
                         <td>  ${record.loan_number}</td>
                         <td>
 
@@ -1447,7 +1495,7 @@ table+=`
                         <td>  ${disburse_date}</td>
                         <td>
 
-                           ${datewithoutD}
+                                    ${maturityDate}
                         </td>
                         <td> ${record.customer_type === 'group' ? 'GROUP' : record.customer_type === 'individual' ? 'PERSONAL' : record.customer_type}  </td>
                         <td> ${group_name}</td>
@@ -1461,64 +1509,64 @@ table+=`
                         <td>SECURED</td>
                         <td> ${reserveBankClassification} </td>
                         <td>${accountStatus}</td>
-                        <td> </td>
-                        <td> ${record.loan_amount_term}</td>
-                        <td> ${record.loan_amount_term}</td>
+                                <td> ${accountStatusChangeDate}</td>
+                                <td> ${formatCurrency(record.loan_amount_term)}</td>
+                                <td> ${formatCurrency(record.loan_amount_term)}</td>
                         <td>
 
-                            ${total_payments ? total_payments[0].total:0}
+                                     ${formatCurrency(totalPaymentsToDate)}
                         </td>
                         <td>
-                        ${total_payments ? total_payments[0].total:0}
+                                ${formatCurrency(totalPaymentsToDate)}
 
                         </td>
-                        <td>${pay_balance}
+                                <td>${formatCurrency(pay_balance)}
                         </td>
-
-                        <td>
-
-                          ${final_arrears_amount}
-                        </td>
-                        <td>
-
-                            ${final_arrears_amount}
-                        </td>
-
 
                         <td>
 
-                           ${arreasamount}
+                                  ${formatCurrency(availableCredit)}
                         </td>
                         <td>
 
-                           ${arreasamount}
+                                     ${formatCurrency(availableCredit)}
+                        </td>
+
+
+                        <td>
+
+                                    ${formatCurrency(final_arrears_amount)}
                         </td>
                         <td>
 
-                           ${days_in_arrears}
+                                    ${formatCurrency(final_arrears_amount)}
                         </td>
                         <td>
-                           ${days_in_arrears}
+
+                                    ${Number(days_in_arrears) || 0}
+                        </td>
+                        <td>
+                                    ${numberOfArrears}
 
 
                         </td>
                         
-                        <td> </td>
+                                <td> ${Number(days_in_arrears) > 0 ? accountStatusChangeDate : ''} </td>
 
-                        <td></td>
+                                <td>${payoffTermination}</td>
 
 
-                        <td> </td>
+                                <td> ${accountStatus === '001' ? closureDate : ''} </td>
 
                         <td> 
-                        ${datewithoutD}
+                                ${firstPaymentDate}
                         </td>
                         <td>
-                           ${datewithoutD}
+                                    ${lastPaymentDate}
                         </td>
                         <td>
-                        ${paymentslast ? paymentslast.amount:0}</td>
-                        <td>${paymentslast ? paymentslast.amount:0}</td>
+                                ${formatCurrency(lastPaidPayment ? lastPaidPayment.paid_amount || lastPaidPayment.amount : 0)}</td>
+                                <td>${formatCurrency(lastPaidPayment ? lastPaidPayment.paid_amount || lastPaidPayment.amount : 0)}</td>
                         </tr>
 `;
                        
@@ -2128,19 +2176,21 @@ table +=`
     });
   }
 
-  function formatDate(date) {
-    // Ensure date is a Date object
-    if (!(date instanceof Date)) {
-        throw new Error('Input must be a Date object');
-    }
+    function formatDate(date) {
+        if (!date) {
+                return '';
+        }
 
-    // Get the year, month, and day
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are zero-indexed
-    const day = String(date.getDate()).padStart(2, '0');
+        const parsedDate = date instanceof Date ? date : new Date(date);
+        if (Number.isNaN(parsedDate.getTime())) {
+                return '';
+        }
 
-    // Format as yyyymmdd
-    return `${year}${month}${day}`;
+        const year = parsedDate.getFullYear();
+        const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+        const day = String(parsedDate.getDate()).padStart(2, '0');
+
+        return `${year}${month}${day}`;
 }
 
 // Add this function to your existing file
