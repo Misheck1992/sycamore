@@ -3788,8 +3788,7 @@ class Loan_model extends CI_Model
                     //                    if loan date is above 15 then the effective date should be 1st day of next month
                     $month_start_date= date("Y-m-01", strtotime($date));
 //                    add 1 to last date of this month
-                    $ll = strtotime('+1 day', strtotime($month_start_date));
-                    $loan_date = date('Y-m-d',  $ll );
+                    $loan_date = date('Y-m-d', strtotime($month_start_date));
 
 //				    calculate number of xtra days
                     $earlier = new DateTime($month_start_date);
@@ -3880,8 +3879,7 @@ class Loan_model extends CI_Model
                     //                    if loan date is above 15 then the effective date should be 1st day of next month
                     $month_start_date= date("Y-m-01", strtotime($date));
 //                    add 1 to last date of this month
-                    $ll = strtotime('+1 day', strtotime($month_start_date));
-                    $loan_date = date('Y-m-d',  $ll );
+                    $loan_date = date('Y-m-d', strtotime($month_start_date));
 
 //				    calculate number of xtra days
                     $earlier = new DateTime($month_start_date);
@@ -5476,9 +5474,7 @@ $this->db->where('payment_number',$i);
             } elseif ($day >= 1 && $day < 15 && $loan->frequency == "Monthly" && $loan->schedule_plan=="cut off") {
                 //                    if loan date is above 15 then the effective date should be 1st day of next month
                 $month_start_date = date("Y-m-01", strtotime($date));
-//                    add 1 to last date of this month
-                $ll = strtotime('+1 day', strtotime($month_start_date));
-                $loan_date = date('Y-m-d', $ll);
+                $loan_date = date('Y-m-d', strtotime($month_start_date));
 
 //				    calculate number of xtra days
                 $earlier = new DateTime($month_start_date);
@@ -6017,8 +6013,7 @@ $this->db->where('payment_number',$i);
 				//                    if loan date is above 15 then the effective date should be 1st day of next month
 				$month_start_date = date("Y-m-01", strtotime($date));
 //                    add 1 to last date of this month
-				$ll = strtotime('+1 day', strtotime($month_start_date));
-				$loan_date = date('Y-m-d', $ll);
+                $loan_date = date('Y-m-d', strtotime($month_start_date));
 
 //				    calculate number of xtra days
 				$earlier = new DateTime($month_start_date);
@@ -6518,8 +6513,7 @@ $this->db->where('payment_number',$i);
                 //                    if loan date is above 15 then the effective date should be 1st day of next month
                 $month_start_date = date("Y-m-01", strtotime($date));
 //                    add 1 to last date of this month
-                $ll = strtotime('+1 day', strtotime($month_start_date));
-                $loan_date = date('Y-m-d', $ll);
+                $loan_date = date('Y-m-d', strtotime($month_start_date));
 
 //				    calculate number of xtra days
                 $earlier = new DateTime($month_start_date);
@@ -6989,8 +6983,7 @@ $this->db->where('payment_number',$i);
             //                    if loan date is above 15 then the effective date should be 1st day of next month
             $month_start_date= date("Y-m-01", strtotime($date));
 //                    add 1 to last date of this month
-            $ll = strtotime('+1 day', strtotime($month_start_date));
-            $loan_date = date('Y-m-d',  $ll );
+            $loan_date = date('Y-m-d', strtotime($month_start_date));
 
 //				    calculate number of xtra days
             $earlier = new DateTime($month_start_date);

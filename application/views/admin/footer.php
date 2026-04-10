@@ -59,7 +59,7 @@ $settings = get_by_id('settings','settings_id','1');
 						<input type="file"  onchange="uploadcommon('id_front')"   id="id_front"  />
 						<input type="text" id="id_front1"  name="id_front" hidden required>
 						<div id="id_front2">
-							<img src="<?php echo base_url('uploads/holder.PNG')?>" alt="" height="100" width="100">
+                            <img src="<?php echo base_url('uploads/holder.png')?>" alt="" height="100" width="100">
 						</div>
 					</div>
 					<div class="form-group col-6">
@@ -67,7 +67,7 @@ $settings = get_by_id('settings','settings_id','1');
 						<input type="file" class="upload-btn-wrapper"  onchange="uploadcommon('Id_back')"  id="Id_back" placeholder="Id Back"  />
 						<input type="text" id="Id_back1" name="Id_back" hidden required>
 						<div id="Id_back2">
-							<img src="<?php echo base_url('uploads/holder.PNG')?>" alt="" height="100" width="100">
+                            <img src="<?php echo base_url('uploads/holder.png')?>" alt="" height="100" width="100">
 						</div>
 					</div>
 
@@ -76,7 +76,7 @@ $settings = get_by_id('settings','settings_id','1');
 						<input type="file"  onchange="uploadcommon('photograph')"    id="photograph" placeholder="Photograph"  />
 						<input type="text" id="photograph1" name="photograph" hidden required>
 						<div id="photograph2">
-							<img src="<?php echo base_url('uploads/holder.PNG')?>" alt="" height="100" width="100">
+                            <img src="<?php echo base_url('uploads/holder.png')?>" alt="" height="100" width="100">
 						</div>
 					</div>
 					<div class="form-group col-6">
@@ -84,7 +84,7 @@ $settings = get_by_id('settings','settings_id','1');
 						<input type="file" onchange="uploadcommon('signature')"    id="signature" placeholder="Signature" />
 						<input type="text" id="signature1" name="signature" hidden required>
 						<div id="signature2">
-							<img src="<?php echo base_url('uploads/holder.PNG')?>" alt="" height="100" width="100">
+                            <img src="<?php echo base_url('uploads/holder.png')?>" alt="" height="100" width="100">
 						</div>
 					</div>
 
@@ -1211,7 +1211,7 @@ function advance_payment(){
 					$("#ppp").html("Featured image was not uploaded");
 					// $("#pvu").html("");
 
-					alert(response.message);
+                    alert(response.details || response.message);
 				}
 
 			}, error: (xht, error, e)=>{
@@ -1277,7 +1277,7 @@ function advance_payment(){
 				} else {
 					// $("#pvu").html("");
 
-					alert(response.message);
+                    alert(response.details || response.message);
 				}
 
 			}, error: (xht, error, e)=>{
@@ -1325,8 +1325,7 @@ function uploadd(file,id){
 
 			} else {
 				// $("#pvu").html("");
-				successToast('Success','file was successfully you may proceed')
-				errorToast('Sorry something went wrong when uploading, please try again');
+                errorToast(response.details || response.message || 'Sorry something went wrong when uploading, please try again');
 			}
 
 		}, error: (xht, error, e)=>{

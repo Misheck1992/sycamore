@@ -150,7 +150,7 @@
 					<div class="form-group col-6">
 						<label for="id_front" class="custom-file-upload"> Upload front photo of ID </label>
 						<input type="file"  onchange="uploadcommon('id_front')"   id="id_front"  />
-						<input type="text" id="id_front1"  name="id_front" hidden required>
+						<input type="text" id="id_front1"  name="id_front" value="<?php echo $row->id_front ?>" hidden required>
 						<div id="id_front2">
 							<?php
 							if(!empty($row->id_front)){
@@ -160,7 +160,7 @@
 								<?php
 							}else{
 								?>
-								<img src="<?php echo base_url('uploads/holder.PNG')?>" alt="" height="100" width="100">
+								<img src="<?php echo base_url('uploads/holder.png')?>" alt="" height="100" width="100">
 								<?php
 							}
 							?>
@@ -169,7 +169,7 @@
 					<div class="form-group col-6">
 						<label for="Id_back" class="custom-file-upload"> Upload Back photo of ID * </label>
 						<input type="file" class="upload-btn-wrapper"  onchange="uploadcommon('Id_back')"  id="Id_back" placeholder="Id Back"  />
-						<input type="text" id="Id_back1" name="Id_back" hidden required>
+						<input type="text" id="Id_back1" name="Id_back" value="<?php echo $row->Id_back ?>" hidden required>
 						<div id="Id_back2">
 							<?php
 							if(!empty($row->Id_back)){
@@ -179,7 +179,7 @@
 							<?php
 							}else{
 								?>
-								<img src="<?php echo base_url('uploads/holder.PNG')?>" alt="" height="100" width="100">
+								<img src="<?php echo base_url('uploads/holder.png')?>" alt="" height="100" width="100">
 							<?php
 							}
 							?>
@@ -191,7 +191,7 @@
 					<div class="form-group col-6">
 						<label for="photograph"  class="custom-file-upload">Upload Photograph </label>
 						<input type="file"  onchange="uploadcommon('photograph')"    id="photograph" placeholder="Photograph"  />
-						<input type="text" id="photograph1" name="photograph" hidden required>
+						<input type="text" id="photograph1" name="photograph" value="<?php echo $row->photograph ?>" hidden required>
 						<div id="photograph2">
 							<?php
 							if(!empty($row->photograph)){
@@ -201,7 +201,7 @@
 								<?php
 							}else{
 								?>
-								<img src="<?php echo base_url('uploads/holder.PNG')?>" alt="" height="100" width="100">
+								<img src="<?php echo base_url('uploads/holder.png')?>" alt="" height="100" width="100">
 								<?php
 							}
 							?>
@@ -210,7 +210,7 @@
 					<div class="form-group col-6">
 						<label for="signature" class="custom-file-upload"> Upload Signature </label>
 						<input type="file" onchange="uploadcommon('signature')"    id="signature" placeholder="Signature" />
-						<input type="text" id="signature1" name="signature" hidden required>
+						<input type="text" id="signature1" name="signature" value="<?php echo $row->signature ?>" hidden required>
 						<div id="signature2">
 							<?php
 							if(!empty($row->signature)){
@@ -220,7 +220,7 @@
 								<?php
 							}else{
 								?>
-								<img src="<?php echo base_url('uploads/holder.PNG')?>" alt="" height="100" width="100">
+								<img src="<?php echo base_url('uploads/holder.png')?>" alt="" height="100" width="100">
 								<?php
 							}
 							?>

@@ -70,38 +70,111 @@ class Proofofidentity extends CI_Controller
     }
 	public function upload()
 	{
-		if ( ! empty($_FILES))
-		{
-			$res=array();
-			$config['upload_path'] = "./uploads";
+		$this->output->set_content_type('application/json');
+		$res = array();
 
-			$config['allowed_types'] = "mp4|ogv|zip|mp3|gif|jpg|png|jpeg|pdf|doc|xml|docx|GIF|JPG|PNG|JPEG|PDF|DOC|XML|DOCX|xls|xlsx|csv|ppt|pptx";
-			$config['file_name'] = uniqid('').rand(100,9999);
-			$this->load->library('upload', $config);
-			if (! $this->upload->do_upload("file")) {
-				$res['status']='error';
-
-				$res['message']='Sorry Something went wrong, we could not upload your file ';
-
-			}else{
-				$uploadData = $this->upload->data();
-				$file = $uploadData['file_name'];
-				$res['status']='success';
-
-				$res['message']='Success, File uploaded ';
-				$res['data']=array(
-					'file_name'=>$file
-				);
-
-
-			}
-
-		} else {
-			$res['status']='error';
-
-			$res['message']='Sorry file can not be empty ';
-
+		if (empty($_FILES) || empty($_FILES['file']['name'])) {
+			$res['status'] = 'error';
+			$res['message'] = 'Sorry file can not be empty ';
+			echo json_encode($res);
+			return;
 		}
+
+		$upload_path = FCPATH . 'uploads' . DIRECTORY_SEPARATOR;
+		if (!is_dir($upload_path) && !@mkdir($upload_path, 0755, true)) {
+			$res['status'] = 'error';
+			$res['message'] = 'Sorry Something went wrong, we could not upload your file ';
+			$res['details'] = 'Uploads directory could not be created.';
+			echo json_encode($res);
+			return;
+		}
+
+		if (!is_writable($upload_path)) {
+			$res['status'] = 'error';
+			$res['message'] = 'Sorry Something went wrong, we could not upload your file ';
+			$res['details'] = 'Uploads directory is not writable.';
+			echo json_encode($res);
+			return;
+		}
+
+		$config['upload_path'] = $upload_path;
+		$allowed_extensions = array('mp4', 'ogv', 'zip', 'mp3', 'gif', 'jpg', 'png', 'jpeg', 'pdf', 'doc', 'xml', 'docx', 'xls', 'xlsx', 'csv', 'ppt', 'pptx');
+		$client_name = isset($_FILES['file']['name']) ? (string) $_FILES['file']['name'] : '';
+		$client_extension = strtolower(pathinfo($client_name, PATHINFO_EXTENSION));
+		if ($client_extension === '' || !in_array($client_extension, $allowed_extensions, true)) {
+			$res['status'] = 'error';
+			$res['message'] = 'Sorry Something went wrong, we could not upload your file ';
+			$res['details'] = 'The selected file type is not allowed.';
+			echo json_encode($res);
+			return;
+		}
+
+		$max_bytes = 20 * 1024 * 1024;
+		if (!isset($_FILES['file']['error']) || is_array($_FILES['file']['error'])) {
+			$res['status'] = 'error';
+			$res['message'] = 'Sorry Something went wrong, we could not upload your file ';
+			$res['details'] = 'Invalid upload payload.';
+			echo json_encode($res);
+			return;
+		}
+
+		switch ((int) $_FILES['file']['error']) {
+			case UPLOAD_ERR_OK:
+				break;
+			case UPLOAD_ERR_INI_SIZE:
+			case UPLOAD_ERR_FORM_SIZE:
+				$res['status'] = 'error';
+				$res['message'] = 'Sorry Something went wrong, we could not upload your file ';
+				$res['details'] = 'The selected file is too large.';
+				echo json_encode($res);
+				return;
+			case UPLOAD_ERR_NO_FILE:
+				$res['status'] = 'error';
+				$res['message'] = 'Sorry file can not be empty ';
+				echo json_encode($res);
+				return;
+			default:
+				$res['status'] = 'error';
+				$res['message'] = 'Sorry Something went wrong, we could not upload your file ';
+				$res['details'] = 'Upload failed with error code ' . (int) $_FILES['file']['error'] . '.';
+				echo json_encode($res);
+				return;
+		}
+
+		if (!is_uploaded_file($_FILES['file']['tmp_name'])) {
+			$res['status'] = 'error';
+			$res['message'] = 'Sorry Something went wrong, we could not upload your file ';
+			$res['details'] = 'The uploaded file is invalid.';
+			echo json_encode($res);
+			return;
+		}
+
+		if ((int) $_FILES['file']['size'] > $max_bytes) {
+			$res['status'] = 'error';
+			$res['message'] = 'Sorry Something went wrong, we could not upload your file ';
+			$res['details'] = 'The selected file is too large.';
+			echo json_encode($res);
+			return;
+		}
+
+		$generated_name = uniqid('', true) . rand(100,9999) . '.' . $client_extension;
+		$target_path = $upload_path . $generated_name;
+		if (!@move_uploaded_file($_FILES['file']['tmp_name'], $target_path)) {
+			log_message('error', 'KYC upload failed: move_uploaded_file could not write to ' . $target_path);
+			$res['status'] = 'error';
+			$res['message'] = 'Sorry Something went wrong, we could not upload your file ';
+			$res['details'] = 'The server could not save the uploaded file.';
+			echo json_encode($res);
+			return;
+		}
+
+		$file = $generated_name;
+		$res['status'] = 'success';
+		$res['message'] = 'Success, File uploaded ';
+		$res['data'] = array(
+			'file_name' => $file
+		);
+
 		echo json_encode($res);
 	}
 	public function check($id)
